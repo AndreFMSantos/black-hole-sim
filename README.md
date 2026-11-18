@@ -19,6 +19,10 @@ A black-hole simulator built one version at a time, **from Newton to Interstella
 - **Interaction:** a Dear ImGui panel with every version and variant labelled by epistemic status (observed, model-dependent, hypothetical, aesthetic); camera orbit; a flight mode on Kerr geodesics with thrusters, orbital controls and an autopilot.
 - **Validation:** an independent analytic oracle for Kerr light rays (Gralla & Lupsasca 2020), golden images, photon-number conservation, comparisons with published numbers; about 40 CTest suites and a CPU core library with ~190 test cases.
 
+## Checked against ipole
+
+The same GRMHD snapshot (Illinois library, MAD, a = 0) imaged by [ipole](https://github.com/AFD-Illinois/ipole) (Mościbrodzka & Gammie 2018), the code used for the Event Horizon Telescope image libraries, and by this renderer with the same physics (230 GHz, i = 17°, same electron temperature, σ cut 1): total flux **0.0374 vs 0.0380 Jy (−1.6 %, −0.7 % at 4× resolution)**; the images differ by 6.5 % (L1), less than our own image differs from itself at 4× resolution. Details, the investigation of a first ×2 mismatch (a wrong reference setting) and the script: [docs/physics/41-ipole-comparison.md](docs/physics/41-ipole-comparison.md), `code/tools/ipole/run_compare.sh`.
+
 ## Build
 
 Linux with an NVIDIA GPU and the CUDA toolkit (developed on an RTX 5080 with CUDA 13.x; set `-DBHS_CUDA_ARCH` for other cards). The core library and the CPU versions build without a GPU, also on macOS.

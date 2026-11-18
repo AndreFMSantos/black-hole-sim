@@ -123,9 +123,9 @@ Image:      --samples N          jittered sub-pixel samples (R2 per quad, seed -
             --turb a [--turb-scale 2] --spot r,phi_deg,size,amp --spot-flare t,w,boost --time T   (v0.9c, only with --hr) 3D lognormal turbulence rotating with the Kerr Omega(r) (differential rotation),
                                  hot spot orbiting at r (T -> T (1 + amp G)^(1/4)), flare = Gaussian pulse in time on top of amp; T = disk time in M (snapshot, no propagation delay);
                                  --disk-rate R advances time R M per video second; --clip disk
-            --disk-model grmhd --grmhd dump.bgm [--munit 1e26 --mbh 6.5e9 --electrons const|rhigh|prop --ti-te 3 --rhigh 20 --th-e-ratio 1 --nu-ghz 230 --tb-range 8,11 --grmhd-sigma-cut 0|1|25]
+            --disk-model grmhd --grmhd dump.bgm [--munit 1e26 --mbh 6.5e9 --electrons const|rhigh|rhigh-single|prop --ti-te 3 --rhigh 20 --th-e-ratio 1 --nu-ghz 230 --tb-range 8,11 --grmhd-sigma-cut 0|1|25]
                                  (v2.2f) GRMHD MODE: a real snapshot (tools/convert_grmhd.py) as 3D textures; n_e = rho rho_unit/(m_p + m_e), B = |b| B_unit; the spin comes from the dump;
-                                 electrons const: Theta_e = Theta (m_p/m_e)/(1 + Ti/Te); rhigh: Ti/Te = (R_high beta^2 + 1)/(1 + beta^2); prop: Theta_e = th-e-ratio Theta
+                                 electrons const: Theta_e = Theta (m_p/m_e)/(1 + Ti/Te); rhigh (EHT/ipole convention): Theta_e = (m_p/m_e)(2/9)/((2/3) + R/3) u/rho, R = (R_high beta^2 + 1)/(1 + beta^2); rhigh-single: Theta (m_p/m_e)/(1 + R) (before 2026-11-18); prop: Theta_e = th-e-ratio Theta
             --disk-model cones [--cone-theta 30 --cone-width 0.0078125 --cone-alpha 5 --cone-rout 60 --cone-range -6,-1]
                                  (E2) jet walls, dual-cone model of Papoutsis et al. 2023: thin Gaussian ridges at theta_c and pi - theta_c, j ~ r^-alpha,
                                  free fall, optically thin, I = int g^3 j ds (frequency independent). Kerr only. False colour of log10 I
@@ -303,7 +303,7 @@ static Cli parse(int argc, char** argv) {
     else if (is("--flux-target")) c.flux_target = std::atof(argv[++i]);
     else if (is("--radio-out")) c.radio_out = argv[++i];
     else if (is("--munit")) p.munit = std::max(1.0, std::atof(argv[++i]));
-    else if (is("--electrons")) { const char* m = argv[++i]; p.electrons = std::strcmp(m, "rhigh") == 0 ? 1 : std::strcmp(m, "prop") == 0 ? 2 : 0; }
+    else if (is("--electrons")) { const char* m = argv[++i]; p.electrons = std::strcmp(m, "rhigh") == 0 ? 1 : std::strcmp(m, "prop") == 0 ? 2 : std::strcmp(m, "rhigh-single") == 0 ? 3 : 0; }
     else if (is("--rhigh")) p.rhigh = std::max(1.0, std::atof(argv[++i]));
     else if (is("--th-e-ratio")) p.th_e_ratio = std::max(0.0, std::atof(argv[++i]));
     else if (is("--torus")) { if (std::sscanf(argv[++i], "%lf,%lf,%lf", &p.torus_rin, &p.torus_rmax, &p.torus_gamma) < 2) { std::fprintf(stderr, "--torus rin,rmax[,gamma]\n"); std::exit(1); } }

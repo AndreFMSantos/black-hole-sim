@@ -26,8 +26,13 @@ The first pass gave ×2 in flux, not uniform. Investigation, in order:
 3. **Point, plasma state:** our `.bgm` read in Python at ipole's trace points (nearest cell): n_e 0.991, B 1.003, β 0.989 (medians), but **Θe 0.754**. The snapshot's adiabatic index is **γ = 4/3**, not 13/9 as I had assumed when deriving `--th-e-ratio` (550.85); with γ = 4/3 the matching value is 734.461. Our code was right; my reference setting was wrong.
 4. **σ cut:** along the traced ray only 1.6 % of the emission is at 0.9 < σ < 1, 0 % above: the cut boundary is not the cause.
 
-## Our R_high electron model is not the EHT convention
-Our `--electrons rhigh` uses Θe = Θi (m_p/m_e)/(1 + R) with Θi = (γ−1)u/ρ; ipole and the EHT GRRT formula list use Θe = (m_p/m_e)(γe−1)(γp−1)/((γp−1)+(γe−1)R)·u/ρ with γe = 4/3, γp = 5/3. At R = 20 ours is 0.52 of the EHT Θe for a γ = 4/3 snapshot and 0.70 for γ = 13/9. Both conventions are in the literature, but the EHT one is the standard: candidate change (it moves our M_unit calibration, so re-calibrate after).
+## R_high electron model: switched to the EHT convention (2026-11-18)
+Before, `--electrons rhigh` used Θe = Θi (m_p/m_e)/(1 + R) with Θi = (γ−1)u/ρ; ipole and the EHT GRRT formula list use Θe = (m_p/m_e)(γe−1)(γp−1)/((γp−1)+(γe−1)R)·u/ρ with γe = 4/3, γp = 5/3. At R = 20 the old one gave 0.52 of the EHT Θe for a γ = 4/3 snapshot (0.70 for γ = 13/9). Decision (André): adopt the EHT convention.
+- `--electrons rhigh` is now the EHT convention (`eht_theta_e_coef` in `render.hpp`: Θe = Θi · (m_p/m_e)(2/3)/(γ−1) / (2 + R)); the old one stays as `--electrons rhigh-single`. The frozen apps (v2_x, v3_1) keep the old one.
+- **Point check** (ipole `--trace`, R_high = 20, nearest cell): Θe ours/ipole median **1.011** (p10 0.912, p90 1.114; n_e has the same spread, 0.84–1.09). The formula matches.
+- **Image** (R_high = 20, R_low = 1, β_crit = 1): ipole 0.02616 Jy; ours **0.02397 Jy (−8.4 %)**, L1 13.5 %; the old convention gave 0.00985 Jy (−62 %).
+- The −8 % left is most likely the order of interpolation (not proved): ipole computes Θe per cell and interpolates Θe; we interpolate β and Θi and compute R(β) after, and R is non-linear in β (with a constant T_p/T_e, linear, the difference is −1.6 %). Neither order is more correct; matching ipole would need 8 fetches per sample instead of the hardware trilinear.
+- **Recalibrated scenarios** (same settings as the UI: 230 GHz, Leung, float, r_cap 30, our MAD a = 0.9375 dump 350): M87* (R_high = 20, i = 17°) `M_unit = 8.589e24 g` → 0.5001 Jy, ring 9.90 M = 37.8 µas (EHT 42); Sgr A* (R_high = 160, i = 30°) `M_unit = 5.003e17 g` → 2.401 Jy, ring 9.90 M = 49.8 µas (EHT 51.8 ± 2.3). The old M87* value (7.361e24) gave 0.333 Jy with the current code even in the old convention: that calibration was already stale.
 
 ## Reproduce
 `code/tools/ipole/run_compare.sh [outdir]` with `IPOLE=<ipole binary>` (ipole commit `7f7a482`, built with its makefile; needs GSL and HDF5) and the snapshot + its `.bgm`; prints both fluxes and the image statistics (`compare_images.py`, numpy + h5py).

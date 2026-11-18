@@ -21,7 +21,7 @@ A black-hole simulator built one version at a time, **from Newton to Interstella
 
 ## Checked against ipole
 
-The same GRMHD snapshot (Illinois library, MAD, a = 0) imaged by [ipole](https://github.com/AFD-Illinois/ipole) (Mościbrodzka & Gammie 2018), the code used for the Event Horizon Telescope image libraries, and by this renderer with the same physics (230 GHz, i = 17°, same electron temperature, σ cut 1): total flux **0.0374 vs 0.0380 Jy (−1.6 %, −0.7 % at 4× resolution)**; the images differ by 6.5 % (L1), less than our own image differs from itself at 4× resolution. Details, the investigation of a first ×2 mismatch (a wrong reference setting) and the script: [docs/physics/41-ipole-comparison.md](docs/physics/41-ipole-comparison.md), `code/tools/ipole/run_compare.sh`.
+The same GRMHD snapshot (Illinois library, MAD, a = 0) imaged by [ipole](https://github.com/AFD-Illinois/ipole) (Mościbrodzka & Gammie 2018), the code used for the Event Horizon Telescope image libraries, and by this renderer with the same physics (230 GHz, i = 17°, σ cut 1). With a constant T_p/T_e: total flux **0.0374 vs 0.0380 Jy (−1.6 %, −0.7 % at 4× resolution)**, images 6.5 % apart (L1), less than our own image differs from itself at 4× resolution. With the EHT R_high = 20 electron model (adopted here after this comparison): 0.0240 vs 0.0262 Jy (−8 %), the rest most likely from interpolating β before computing T_e instead of after. Details, the investigation of a first ×2 mismatch (a wrong reference setting) and the script: [docs/physics/41-ipole-comparison.md](docs/physics/41-ipole-comparison.md), `code/tools/ipole/run_compare.sh`.
 
 ## Build
 

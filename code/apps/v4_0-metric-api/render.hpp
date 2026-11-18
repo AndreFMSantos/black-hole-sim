@@ -121,7 +121,7 @@ struct Params {
   double munit = 1e26;             // M_unit (g): rho_unit = M_unit / L^3, L = G M_BH / c^2 (--mbh); n_e = rho rho_unit/(m_p + m_e), B_G = |b| c sqrt(4 pi rho_unit)
   int emission = 0;                // v2.2b3: 0 Dexter 2016 (ultra-relativistic, Theta_e > 3), 1 Leung et al. 2011 (K_2(1/Theta_e), Theta_e >~ 0.5)
   double theta_e_min = 0.3;        // no emission below this Theta_e
-  int electrons = 0;               // 0: Theta_e = Theta (m_p/m_e)/(1 + Ti/Te) (pyharm); 1: R_high/R_low (Ti/Te = (R_high beta^2 + 1)/(1 + beta^2)); 2: Theta_e = th_e_ratio Theta
+  int electrons = 0;               // 0: Theta_e = Theta (m_p/m_e)/(1 + Ti/Te) (pyharm); 1: R_high/R_low, EHT convention (R = (R_high beta^2 + 1)/(1 + beta^2), see eht_theta_e_coef); 2: Theta_e = th_e_ratio Theta; 3: R_high with the old single-temperature split Theta (m_p/m_e)/(1 + R)
   double rhigh = 20.0, th_e_ratio = 1.0;
   double grmhd_sigma_cut = 0.0;   // E3: no emission where sigma = b^2/rho > cut (0 = off). EHT M87 Papers V/VIII use 1 (VIII also tested 10); Chael et al. 2019 used 25.
                                    // In the funnel rho is the numerical floor, so its emission is not physical; the UI sets 1 for GRMHD
@@ -202,6 +202,9 @@ void grmhd_set_blend(double tau, double dt_M, double pattern = 0.2);  // tau in 
 bool grmhd_has_next();
 void grmhd_set_half(bool on);  // v2.2f-d: store the snapshot as 16-bit float textures (half the VRAM / bandwidth); applies to the next grmhd_load
 double grmhd_spin();
+// R_high electron temperature in the EHT convention: Theta_e = Theta_i * eht_theta_e_coef(gam) / (2 + R), with Theta_i = (gam - 1) u / rho of the snapshot
+// (from Theta_e = (m_p/m_e)(ge-1)(gp-1)/((gp-1) + (ge-1) R) u/rho, ge = 4/3, gp = 5/3; ipole and the EHT GRRT formula list)
+inline double eht_theta_e_coef(double gam) { return (1.67262192369e-24 / 9.1093837015e-28) * (2.0 / 3.0) / (gam - 1.0); }
 void grmhd_sample_batch(const Params& p, const std::vector<double>& rmuphi, std::vector<float>& out);  // (r, mu, phi_BL) -> 12 interpolated fields (test)
 void grmhd_map_batch(const Params& p, const std::vector<double>& rmu, std::vector<float>& out);  // test: (r, mu) -> (X1, X2) through the device's inverse FMKS map
 void grmhd_null_batch(const Params& p, const std::vector<double>& rays, std::vector<double>& out);   // test: max |g^{mu nu} p_mu p_nu| / p_t^2 (KS) along each ray

@@ -67,7 +67,7 @@ struct KP {
   cudaTextureObject_t g_tex[3];  // v2.2f: (rho, theta_i, |b|, beta), u^mu KS, bhat^mu KS (hardware trilinear filter)
   cudaTextureObject_t g_tex2[3]; double g_tau, g_dtM, g_pat; int g_blend;  // v4.0: 2nd snapshot (t + dt) and the time fraction tau in [0,1]; g_blend = 0: static snapshot
   int g_n1, g_n2, g_n3, el_model;
-  double g_startx1, g_dx1, g_hslope, g_ms, g_palpha, g_pxt, g_pnorm, g_rho_unit, g_b_unit, g_rhigh, g_ce, g_rcap, g_gam, g_scut;
+  double g_startx1, g_dx1, g_hslope, g_ms, g_palpha, g_pxt, g_pnorm, g_rho_unit, g_b_unit, g_rhigh, g_ce, g_rcap, g_gam, g_scut, g_te_c;
   int model;  // v2.2b: 0 layer, 1 torus with synchrotron
   double t_ell, t_utin, t_hmax, t_gamma, t_rin, t_rmax, ne0, pbeta, ti_te, nu_obs, mcm, tb_lo, tb_hi, th_e_max, t_step, g_step, the_min;
   double r_pn, r_pt, r_hr, r_xi, r_rout;  // v4.0 parametric RIAF (model 3)
@@ -663,7 +663,9 @@ struct VolAccT {
     const float g = float(eobs) * float(dop) / E, thI = o.thI;
     float thE;
     if (p.el_model == 2) thE = p.f.g_ce * thI;
-    else if (p.el_model == 1) { const float b2 = o.beta * o.beta; const float tite = (p.f.g_rhigh * b2 + 1.f) / (1.f + b2); thE = thI * float(synch::kMp / synch::kMe) / (1.f + tite); }
+    else if (p.el_model == 1) {  // R_high, EHT convention (ipole; EHT GRRT formula list eq. 8): Theta_e = (m_p/m_e)(ge-1)(gp-1)/((gp-1) + (ge-1) R) u/rho, ge = 4/3, gp = 5/3
+      const float b2 = o.beta * o.beta; const float R = (p.f.g_rhigh * b2 + 1.f) / (1.f + b2); thE = thI * float(p.g_te_c) / (2.f + R);
+    } else if (p.el_model == 3) { const float b2 = o.beta * o.beta; const float tite = (p.f.g_rhigh * b2 + 1.f) / (1.f + b2); thE = thI * float(synch::kMp / synch::kMe) / (1.f + tite); }  // R_high, single-temperature split (before 2026-11-18)
     else thE = thI * float(synch::kMp / synch::kMe) / (1.f + p.f.ti_te);
     if (thE < p.f.the_min || sinB <= 0.f) return;
     // v2.2h: all the transport in float (FP64 is 1/64 of the rate on the RTX 5080); the intervals fit in float (j ~ 1e-14..1e-22, ds ~ 1e14 cm)
@@ -1444,7 +1446,7 @@ KP make_kp(const Params& p) {
     const auto& h = S.grm_h;
     k.a = h.a;
     k.g_n1 = int(h.n1); k.g_n2 = int(h.n2); k.g_n3 = int(h.n3); k.g_startx1 = h.startx1; k.g_dx1 = h.dx1;
-    k.g_hslope = h.hslope; k.g_ms = h.mks_smooth; k.g_palpha = h.poly_alpha; k.g_pxt = h.poly_xt; k.g_pnorm = h.fmks().poly_norm(); k.g_gam = h.gam;
+    k.g_hslope = h.hslope; k.g_ms = h.mks_smooth; k.g_palpha = h.poly_alpha; k.g_pxt = h.poly_xt; k.g_pnorm = h.fmks().poly_norm(); k.g_gam = h.gam; k.g_te_c = eht_theta_e_coef(h.gam);
     for (int i = 0; i < 3; ++i) k.g_tex[i] = S.grm_tex[i];
     k.g_blend = S.grm_next && S.grm_tau >= 0.0; k.g_tau = std::min(1.0, std::max(0.0, S.grm_tau)); k.g_dtM = S.grm_dtM; k.g_pat = S.grm_pat;
     for (int i = 0; i < 3; ++i) k.g_tex2[i] = S.grm_tex2[i];

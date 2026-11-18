@@ -87,14 +87,14 @@ static const Scenario kScenarios[] = {
      [](Setup& s) {
        radio_common(s); auto& p = s.p; p.a = 0.9; p.model = 1; p.torus_rin = 7; p.torus_rmax = 12; p.ne0 = 3e4; p.plasma_beta = 3; p.theta_e_max = 20; p.emission = 0; p.tonemap = kcuda::Tonemap::Aces;
      }},
-    {"Own GRMHD (M87*, MAD a = 0.9375)", "v2.2g", Badge::ModelDependent, "Our own AthenaK simulation, calibrated to 0.5 Jy (model scale of EHT Paper V; measured ~0.66 Jy). Ring = Kerr critical curve.",
+    {"Own GRMHD (M87*, MAD a = 0.9375)", "v2.2g", Badge::ModelDependent, "Our own AthenaK simulation, R_high = 20 in the EHT electron convention (as ipole), calibrated to 0.5 Jy (model scale of EHT Paper V). Ring 37.8 uas (EHT: 42).",
      [](Setup& s) {
-       radio_common(s); auto& p = s.p; p.model = 2; p.electrons = 1; p.rhigh = 20; p.munit = 7.361e24; p.emission = 1;
+       radio_common(s); auto& p = s.p; p.model = 2; p.electrons = 1; p.rhigh = 20; p.munit = 8.589e24; p.emission = 1;  // 0.5001 Jy, 2026-11-18 (EHT convention)
        s.grmhd = bhs_data("/athenak/run_d/bgm_hi/mad_00350.bgm");
      }},
-    {"Own GRMHD as Sgr A* (EHT best guess)", "v2.2g", Badge::ModelDependent, "MAD, R_high = 160, i = 30 degrees, M = 4.14e6 Msun at 8127 pc (values from the EHT Paper V simulations, not the measurement), calibrated to 2.4 Jy. Ring 50.8 uas vs 51.8 +- 2.3 from the EHT.",
+    {"Own GRMHD as Sgr A* (EHT best guess)", "v2.2g", Badge::ModelDependent, "MAD, R_high = 160, i = 30 degrees, M = 4.14e6 Msun at 8127 pc (values from the EHT Paper V simulations, not the measurement), calibrated to 2.4 Jy (EHT electron convention). Ring 49.8 uas vs 51.8 +- 2.3 from the EHT.",
      [](Setup& s) {
-       radio_common(s); auto& p = s.p; p.model = 2; p.electrons = 1; p.rhigh = 160; p.munit = 3.546e17; p.emission = 1; p.mbh = 4.14e6; s.cam = {30, 0, 150};
+       radio_common(s); auto& p = s.p; p.model = 2; p.electrons = 1; p.rhigh = 160; p.munit = 5.003e17;  /* 2.401 Jy, 2026-11-18 (EHT convention) */ p.emission = 1; p.mbh = 4.14e6; s.cam = {30, 0, 150};
        s.grmhd = bhs_data("/athenak/run_d/bgm_hi/mad_00350.bgm");
      }},
     {"Cinematic disk: filaments, spiral arms, rings", "v2.4 - v2.6", Badge::Aesthetic, "ARTISTIC: Novikov-Thorne disk with filamentary texture, a two-arm spiral pattern and rings, all sheared by the Kerr Omega(r). The patterns are not physics; the temperature, redshift and lensing underneath are.",

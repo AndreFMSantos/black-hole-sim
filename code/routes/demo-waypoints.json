@@ -1,0 +1,10 @@
+{
+  "name": "waypoints", "fps": 12, "seconds": 4, "ease": "smooth",
+  "spin": 0.9, "fov": 50, "exposure": 3,
+  "ship": {"timescale": 30,
+           "waypoints": [{"t": 0, "r": 40, "theta": 85, "phi": 0},
+                         {"t": 2, "r": 28, "theta": 78, "phi": 40},
+                         {"t": 4, "r": 18, "theta": 70, "phi": 100}]},
+  "lookat": {"target": "hole", "roll": 0},
+  "disk": {"hr": 0.06, "tau": 4, "flare": 0.15, "turb": 1.2, "turb_scale": 1.2, "edge_soft": 0.12, "slowlight": false, "time": {"mode": "rate", "rate": 20, "t0": 0}}
+}

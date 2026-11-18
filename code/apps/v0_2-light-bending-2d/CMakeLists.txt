@@ -1,0 +1,5 @@
+find_package(OpenGL REQUIRED)
+add_executable(v0_2-light-bending-2d main.cpp)
+target_link_libraries(v0_2-light-bending-2d PRIVATE bhs_core glfw OpenGL::GL)
+target_compile_definitions(v0_2-light-bending-2d PRIVATE GL_SILENCE_DEPRECATION)
+target_compile_options(v0_2-light-bending-2d PRIVATE -Wall -Wextra)

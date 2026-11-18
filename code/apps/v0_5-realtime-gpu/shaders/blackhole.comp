@@ -1,0 +1,234 @@
+#version 460
+#extension GL_KHR_shader_subgroup_quad : require
+// v0.5 — GLSL port of the shade() function of v0.4 (CPU). One thread per pixel.
+// Units G = c = M = 1. See notes/physics/05-realtime-gpu.md.
+layout(local_size_x = 8, local_size_y = 8) in;
+layout(rgba32f, binding = 0) uniform writeonly image2D outImg;
+layout(binding = 0) uniform sampler1D lut;
+layout(binding = 1) uniform sampler2D sky;  // RGB16F HDR map with mipmaps (only if useSky)  // RGB32F, 1024 entries, log-spaced in T
+
+uniform ivec2 size;
+uniform vec3 cHat, fwd, rightV, upV;  // camera basis (cHat = hole -> observer)
+uniform float dist, tanHalf, rin, rout, tpeak, exposure, dphi, maxPhi;
+uniform int doppler, showDisk, useSky;
+uniform float skyExposure;
+uniform int skyMode;  // 0 = gradients by swapping inside the 2x2 quad (fast, default); 1 = 2 extra rays per pixel (reference); 2 = no filter (visible aliasing)
+
+const float PI = 3.14159265358979;
+const float T0 = 500.0, T1 = 100000.0;
+const float N_LUT = 1024.0;
+
+// ---- hash / noise / stars (same as bhs::stars) ----
+uint hash3(uint a, uint b, uint c) {
+  uint h = (a * 0x9E3779B1u) ^ (b * 0x85EBCA6Bu) ^ (c * 0xC2B2AE35u);
+  h ^= h >> 15; h *= 0x2C1B3C6Du; h ^= h >> 12; h *= 0x297A2D39u; h ^= h >> 15;
+  return h;
+}
+float unitf(uint h) { return float(h & 0xFFFFFFu) / 16777216.0; }
+
+float vnoise(vec3 p) {
+  ivec3 i0 = ivec3(floor(p));
+  vec3 f = p - vec3(i0);
+  vec3 s = f * f * (3.0 - 2.0 * f);
+  float r = 0.0;
+  for (int dz = 0; dz < 2; ++dz)
+    for (int dy = 0; dy < 2; ++dy)
+      for (int dx = 0; dx < 2; ++dx) {
+        float h = unitf(hash3(uint(i0.x + dx), uint(i0.y + dy), uint(i0.z + dz)));
+        r += h * (dx == 1 ? s.x : 1.0 - s.x) * (dy == 1 ? s.y : 1.0 - s.y) * (dz == 1 ? s.z : 1.0 - s.z);
+      }
+  return r;
+}
+
+vec3 star_sample(vec3 v) {
+  vec3 col = vec3(0.004, 0.005, 0.012);
+  float ax = abs(v.x), ay = abs(v.y), az = abs(v.z);
+  int face; float u, w, m;
+  if (ax >= ay && ax >= az) { face = v.x > 0.0 ? 0 : 1; m = ax; u = v.y; w = v.z; }
+  else if (ay >= az)        { face = v.y > 0.0 ? 2 : 3; m = ay; u = v.x; w = v.z; }
+  else                      { face = v.z > 0.0 ? 4 : 5; m = az; u = v.x; w = v.y; }
+  u /= m; w /= m;
+  const int N = 220;
+  float fu = (u + 1.0) * 0.5 * float(N), fw = (w + 1.0) * 0.5 * float(N);
+  int cu = clamp(int(fu), 0, N - 1), cw = clamp(int(fw), 0, N - 1);
+  uint h = hash3(uint(face), uint(cu), uint(cw));
+  if (unitf(h) < 0.06) {
+    float su = float(cu) + 0.2 + 0.6 * unitf(hash3(h, 1u, 2u));
+    float sw = float(cw) + 0.2 + 0.6 * unitf(hash3(h, 3u, 4u));
+    float d2 = (fu - su) * (fu - su) + (fw - sw) * (fw - sw);
+    float mag = 0.25 + 0.75 * unitf(hash3(h, 5u, 6u));
+    float bright = mag * mag * exp(-d2 / 0.018);
+    float t = unitf(hash3(h, 7u, 8u));
+    col += bright * vec3(0.8 + 0.4 * t, 0.9, 1.3 - 0.5 * t);
+  }
+  return col;
+}
+
+// ---- Binet: u'' = -u + 3u^2 (RK4 em phi) ----
+float accel(float u) { return -u + 3.0 * u * u; }
+
+// ---- disk ----
+float disk_f(float x) { return pow(x, -3.0) * (1.0 - sqrt(rin / x)); }
+float disk_temperature(float r) {
+  if (r <= rin) return 0.0;
+  return pow(disk_f(r) / disk_f(49.0 / 36.0 * rin), 0.25);
+}
+vec3 lut_color(float T) {
+  if (T <= T0) return vec3(0.0);
+  float x = log(min(T, T1) / T0) / log(T1 / T0) * (N_LUT - 1.0);
+  return texture(lut, (x + 0.5) / N_LUT).rgb;
+}
+
+// result of a trace: kind 0 = captured/orbiting (black), 1 = disk hit, 2 = escaped
+struct Tr { int kind; float r, phi_hit, phi_end, b, cos_a; vec3 t_hat; };
+
+Tr trace_dir(vec3 d) {
+  Tr R; R.kind = 0; R.r = 0.0; R.phi_hit = 0.0; R.phi_end = 0.0;
+  float cos_a = dot(d, cHat);
+  vec3 perp = d - cos_a * cHat;
+  float sin_a = length(perp);
+  R.cos_a = cos_a;
+  if (sin_a < 1e-6) {  // exactly along the axis: no ray plane
+    R.t_hat = vec3(0.0); R.b = 0.0;
+    if (cos_a >= 0.0) { R.kind = 2; R.phi_end = 0.0; R.t_hat = vec3(0.0); }
+    return R;
+  }
+  vec3 t_hat = perp / sin_a;
+  R.t_hat = t_hat;
+  float alpha = atan(sin_a, cos_a);
+  float b = dist * sin(alpha) / sqrt(1.0 - 2.0 / dist);
+  R.b = b;
+
+  float phi0 = atan(-cHat.z, t_hat.z);
+  while (phi0 <= 1e-6) phi0 += PI;
+  while (phi0 > PI) phi0 -= PI;
+
+  // trace_with_disk (schwarzschild.hpp), with a larger step and early exit
+  float u0 = 1.0 / dist;
+  float w2 = 1.0 / (b * b) - u0 * u0 * (1.0 - 2.0 * u0);
+  float u = u0, w = (cos_a < 0.0 ? 1.0 : -1.0) * sqrt(max(0.0, w2));
+  float phi = 0.0, next_cross = phi0;
+  for (int it = 0; it < 100000 && phi < maxPhi; ++it) {
+    float h = dphi;
+    float k1u = w, k1w = accel(u);
+    float k2u = w + 0.5 * h * k1w, k2w = accel(u + 0.5 * h * k1u);
+    float k3u = w + 0.5 * h * k2w, k3w = accel(u + 0.5 * h * k2u);
+    float k4u = w + h * k3w, k4w = accel(u + h * k3u);
+    float nu = u + (h / 6.0) * (k1u + 2.0 * k2u + 2.0 * k3u + k4u);
+    float nw = w + (h / 6.0) * (k1w + 2.0 * k2w + 2.0 * k3w + k4w);
+    float phi_new = phi + h;
+    while (next_cross <= phi_new) {
+      float frac = (next_cross - phi) / h;
+      float uc = u + frac * (nu - u);
+      if (showDisk != 0 && uc > 0.0) {
+        float rc = 1.0 / uc;
+        if (rc > rin && rc < rout) { R.kind = 1; R.r = rc; R.phi_hit = next_cross; return R; }
+      }
+      next_cross += PI;
+    }
+    phi = phi_new;
+    if (nu >= 0.5) return R;  // captured
+    if (nw < 0.0 && nu <= 0.0) {
+      R.kind = 2;
+      R.phi_end = phi - h + (u / (u - nu)) * h;
+      return R;
+    }
+    u = nu; w = nw;
+  }
+  return R;
+}
+
+// celestial direction of a ray that escaped
+vec3 escape_vec(Tr R) { return cos(R.phi_end) * cHat + sin(R.phi_end) * R.t_hat; }
+
+// direction -> (u, v) of the equirectangular map (convention in bhs/skymap.hpp)
+vec2 sky_uv(vec3 n) {
+  float ra = atan(n.y, n.x);
+  return vec2(0.5 - ra / (2.0 * PI), 0.5 - asin(clamp(n.z, -1.0, 1.0)) / PI);
+}
+
+vec3 pixel_dir(vec2 p) {  // p = pixel coordinates (centre = +0.5), j from the top
+  float aspect = float(size.x) / float(size.y);
+  float x = (2.0 * (p.x / float(size.x)) - 1.0) * tanHalf * aspect;
+  float y = (1.0 - 2.0 * (p.y / float(size.y))) * tanHalf;
+  return normalize(fwd + x * rightV + y * upV);
+}
+
+// uv of pixel p's ray, if it escapes (no disk)
+bool neighbour_uv(vec2 p, out vec2 uv) {
+  Tr R = trace_dir(pixel_dir(p));
+  uv = vec2(0.0);
+  if (R.kind != 2) return false;
+  uv = sky_uv(escape_vec(R));
+  return true;
+}
+float wrap_half(float x) { return x - round(x); }  // difference in u across the seam
+
+// Sky colour for the main ray (uv0) with gradients obtained from 2 extra rays (neighbours in x and y).
+// Mode 0: the 4 pixels of a 2x2 quad (consecutive threads) swap the sky uv among themselves, like the
+// dFdx/dFdy derivatives of a fragment shader: gradient = (neighbour - me) with the sign of the position in the quad.
+vec3 real_sky_quad(vec2 uv0, vec2 uvH, float okH, vec2 uvV, float okV, ivec2 lq) {
+  vec2 dx = vec2(0.0), dy = vec2(0.0);
+  if (okH > 0.5) { dx = vec2(wrap_half(uvH.x - uv0.x), uvH.y - uv0.y); if (lq.x == 1) dx = -dx; }
+  if (okV > 0.5) { dy = vec2(wrap_half(uvV.x - uv0.x), uvV.y - uv0.y); if (lq.y == 1) dy = -dy; }
+  return skyExposure * textureGrad(sky, uv0, dx, dy).rgb;
+}
+
+vec3 real_sky(vec2 uv0, vec2 pix) {
+  if (skyMode == 2) return skyExposure * textureLod(sky, uv0, 0.0).rgb;
+  vec2 dx = vec2(0.0), dy = vec2(0.0), n;
+  if (neighbour_uv(pix + vec2(1.0, 0.0), n)) dx = vec2(wrap_half(n.x - uv0.x), n.y - uv0.y);
+  else if (neighbour_uv(pix - vec2(1.0, 0.0), n)) dx = vec2(wrap_half(uv0.x - n.x), uv0.y - n.y);
+  if (neighbour_uv(pix + vec2(0.0, 1.0), n)) dy = vec2(wrap_half(n.x - uv0.x), n.y - uv0.y);
+  else if (neighbour_uv(pix - vec2(0.0, 1.0), n)) dy = vec2(wrap_half(uv0.x - n.x), uv0.y - n.y);
+  return skyExposure * textureGrad(sky, uv0, dx, dy).rgb;
+}
+
+vec3 shade(vec2 pix, Tr R, vec2 uvH, float okH, vec2 uvV, float okV, ivec2 lq) {
+  if (R.kind == 1) {
+    float r = R.r;
+    vec3 P = r * (cos(R.phi_hit) * cHat + sin(R.phi_hit) * R.t_hat);
+    float lz = doppler != 0 ? -R.b * cross(cHat, R.t_hat).z : 0.0;
+    float omega = sqrt(1.0 / (r * r * r));
+    float g = sqrt(1.0 - 3.0 / r) / (sqrt(1.0 - 2.0 / dist) * (1.0 - omega * lz));
+    float T_obs = g * tpeak * disk_temperature(r);
+    float psi = atan(P.y, P.x) - 2.2 * log(r / rin);
+    float lr = log(r);
+    float n = 0.55 * vnoise(vec3(3.0 * cos(psi), 3.0 * sin(psi), 9.0 * lr)) +
+              0.45 * vnoise(vec3(9.0 * cos(psi), 9.0 * sin(psi), 28.0 * lr));
+    return (exposure * mix(0.55, 1.15, n)) * lut_color(T_obs);
+  }
+  if (R.kind != 2) return vec3(0.0);
+  if (R.t_hat == vec3(0.0)) return useSky != 0 ? skyExposure * textureLod(sky, sky_uv(cHat), 0.0).rgb : star_sample(cHat);
+  vec3 v = escape_vec(R);
+  if (useSky == 0) return star_sample(v);
+  if (skyMode == 0) return real_sky_quad(sky_uv(v), uvH, okH, uvV, okV, lq);
+  return real_sky(sky_uv(v), pix);
+}
+
+void main() {
+  // 2x2 mapping of the threads: 4 consecutive threads (one subgroup quad) = a 2x2 block of pixels.
+  uint idx = gl_LocalInvocationIndex, quad = idx >> 2;
+  ivec2 lq = ivec2(int(idx & 1u), int((idx >> 1) & 1u));
+  ivec2 id = ivec2(gl_WorkGroupID.xy) * 8 + ivec2(int(((quad & 3u) << 1)) + lq.x, int((quad >> 2) << 1) + lq.y);
+  bool inside = id.x < size.x && id.y < size.y;  // no early return: the quads have to stay complete
+  ivec2 idc = min(id, size - 1);
+  int j = size.y - 1 - idc.y;  // row from the top; the GL image has y = 0 at the bottom
+  vec2 pix = vec2(float(idc.x) + 0.5, float(j) + 0.5);
+  Tr R = trace_dir(pixel_dir(pix));
+  vec2 uv0 = vec2(0.0);
+  float ok = 0.0;
+  if (R.kind == 2) { uv0 = sky_uv(escape_vec(R)); ok = 1.0; }
+  vec2 uvH = vec2(0.0), uvV = vec2(0.0);
+  float okH = 0.0, okV = 0.0;
+  if (useSky != 0 && skyMode == 0) {  // uniform flow: all threads of the quad execute
+    uvH = subgroupQuadSwapHorizontal(uv0); okH = subgroupQuadSwapHorizontal(ok);
+    uvV = subgroupQuadSwapVertical(uv0);   okV = subgroupQuadSwapVertical(ok);
+  }
+  // the j axis grows downwards, but idc.y upwards: the quad's "+1 in y" neighbour is the inverse, so the sign is adjusted
+  vec3 c = shade(pix, R, uvH, okH, uvV, okV, ivec2(lq.x, 1 - lq.y));
+  float L = dot(c, vec3(0.2126, 0.7152, 0.0722));
+  c = c / (1.0 + L);
+  c = pow(clamp(c, 0.0, 1.0), vec3(1.0 / 2.2));
+  if (inside) imageStore(outImg, id, vec4(c, 1.0));
+}

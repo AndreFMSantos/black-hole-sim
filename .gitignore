@@ -1,0 +1,13 @@
+# build trees
+code/build*/
+# fetched third-party code (see CREDITS.md)
+code/third_party/*
+!code/third_party/README.md
+# fetched data and large outputs
+assets/sky/
+data/
+*.exr
+*.bgm
+*.h5
+*.mp4
+__pycache__/

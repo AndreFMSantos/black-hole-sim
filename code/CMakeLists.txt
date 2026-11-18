@@ -1,0 +1,71 @@
+cmake_minimum_required(VERSION 3.20)
+project(black_hole_sim LANGUAGES C CXX)
+
+# v0.6b (CUDA) is optional: Linux with nvcc only. The Mac builds without it. Arch's nvcc lives in /opt/cuda/bin.
+if(NOT APPLE)
+  if(NOT DEFINED ENV{CUDACXX} AND NOT CMAKE_CUDA_COMPILER AND EXISTS /opt/cuda/bin/nvcc)
+    set(CMAKE_CUDA_COMPILER /opt/cuda/bin/nvcc)
+    set(CUDAToolkit_ROOT /opt/cuda)
+  endif()
+  include(CheckLanguage)
+  check_language(CUDA)
+endif()
+if(NOT APPLE AND CMAKE_CUDA_COMPILER)
+  set(BHS_CUDA_ARCH "120" CACHE STRING "CUDA architecture (RTX 5080 = 120)")
+  enable_language(CUDA)
+  find_package(CUDAToolkit REQUIRED)
+endif()
+
+# where the data lives (GRMHD snapshots, renders): <repo>/data by default; the BHS_DATA environment variable overrides it at run time
+set(BHS_DATA_DIR "${CMAKE_SOURCE_DIR}/../data" CACHE PATH "default data folder (GRMHD .bgm, timelapse work)")
+add_compile_definitions(BHS_DATA_DEFAULT="${BHS_DATA_DIR}")
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+if(NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE Release)
+endif()
+
+# old deps (doctest) declare cmake_minimum_required < 3.5, removed in CMake 4
+set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
+include(FetchContent)
+FetchContent_Declare(doctest GIT_REPOSITORY https://github.com/doctest/doctest.git GIT_TAG v2.4.11)
+FetchContent_Declare(glfw GIT_REPOSITORY https://github.com/glfw/glfw.git GIT_TAG 3.4)
+set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
+set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+# tinyexr (header only + tinyexr.cc + miniz): non-existent SOURCE_SUBDIR = download only, do not run their CMakeLists
+FetchContent_Declare(tinyexr GIT_REPOSITORY https://github.com/syoyo/tinyexr.git GIT_TAG v1.0.8 SOURCE_SUBDIR bhs-no-cmake)
+FetchContent_MakeAvailable(doctest glfw tinyexr)
+
+enable_testing()
+add_subdirectory(core)
+add_subdirectory(apps/v0_1-newton-euler)
+add_subdirectory(apps/v0_2-light-bending-2d)
+add_subdirectory(apps/v0_3-raytrace-cpu)
+add_subdirectory(apps/v0_4-accretion-disk)
+add_subdirectory(apps/v0_6-kerr-cpu)
+add_subdirectory(apps/v0_7b-photon-rings)
+add_subdirectory(apps/v1_1-record-2d)
+add_subdirectory(apps/sky-stats)
+if(NOT APPLE)  # v0.5 needs OpenGL 4.6 (compute shaders); macOS stays at 4.1
+  add_subdirectory(apps/v0_5-realtime-gpu)
+endif()
+# CUDA apps (Linux with nvcc). One folder per milestone, each with the code of THAT version (see tools/refactor/extract_versions.sh);
+# v3_1-kerr-cuda-ui is the latest app and the one under development. -DBHS_BUILD_LEGACY=OFF builds only that one.
+option(BHS_BUILD_LEGACY "also build the older CUDA apps (v06b .. v2x)" ON)
+if(NOT APPLE AND CMAKE_CUDA_COMPILER)
+  if(BHS_BUILD_LEGACY)
+    add_subdirectory(apps/v0_6b-kerr-cuda)
+    add_subdirectory(apps/v0_7-cinematic-cuda)
+    add_subdirectory(apps/v0_8-flight-cuda)
+    add_subdirectory(apps/v0_9-disk-cuda)
+    add_subdirectory(apps/v2_x-variants-cuda)
+  endif()
+  add_subdirectory(apps/v3_1-kerr-cuda-ui)
+  add_subdirectory(apps/v4_0-metric-api)  # v4.0: Metric / DiskModel / Observer templates; goldens from the frozen v3_1
+endif()
+if(APPLE)  # v0.6b-metal: Kerr em Metal (Apple Silicon)
+  add_subdirectory(apps/v0_6b-kerr-metal)
+endif()

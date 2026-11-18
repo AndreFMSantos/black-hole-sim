@@ -1,0 +1,10 @@
+{
+  "name": "demo", "fps": 24, "seconds": 4, "ease": "smooth",
+  "spin": 0.9, "fov": [{"t": 0, "v": 45}, {"t": 4, "v": 30}], "exposure": 3,
+  "ship": {"mode": "orbit", "r": 24, "theta": 82, "phi": 0, "timescale": 6,
+           "burns": [{"t0": 1.5, "t1": 2.0, "acc": [0.03, 0, 0]}]},
+  "view": [{"t": 0, "yaw": 0, "pitch": 0, "roll": 0}, {"t": 4, "yaw": 20, "pitch": -5, "roll": 0}],
+  "disk": {"hr": 0.06, "tau": 4, "flare": 0.15, "turb": 1.2, "turb_scale": 1.2, "edge_soft": 0.12,
+           "spot": {"r": 9, "phi": 200, "size": 1.2, "amp": 5}, "slowlight": true,
+           "time": {"mode": "rate", "rate": 20, "t0": 0}}
+}

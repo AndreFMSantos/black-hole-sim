@@ -1,0 +1,5 @@
+find_package(OpenGL REQUIRED)
+add_executable(v0_1-newton-euler main.cpp)
+target_link_libraries(v0_1-newton-euler PRIVATE bhs_core glfw OpenGL::GL)
+target_compile_definitions(v0_1-newton-euler PRIVATE GL_SILENCE_DEPRECATION)
+target_compile_options(v0_1-newton-euler PRIVATE -Wall -Wextra)

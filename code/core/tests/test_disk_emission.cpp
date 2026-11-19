@@ -72,17 +72,21 @@ TEST_CASE("emission: lut::build(f_col = 1) is unchanged and build(f) matches rgb
   CHECK(d2[3 * i + 1] == doctest::Approx(float(c.y)).epsilon(1e-6));
 }
 
-TEST_CASE("emission: Eddington limb darkening conserves the flux (2 int_0^1 L(mu) mu dmu = 1) and darkens the limb") {
+TEST_CASE("emission: Chandrasekhar (1+2.06 mu) and grey Eddington (1+1.5 mu) limb darkening conserve flux") {
   const int n = 100000;
-  double s = 0;
+  double s_ch = 0, s_ed = 0;
   for (int i = 0; i < n; ++i) {
     const double mu = (i + 0.5) / n;
-    s += 2.0 * emission::limb_eddington(mu) * mu / n;
+    s_ch += 2.0 * emission::limb_chandrasekhar(mu) * mu / n;
+    s_ed += 2.0 * emission::limb_eddington_grey(mu) * mu / n;
   }
-  CHECK(s == doctest::Approx(1.0).epsilon(1e-9));
-  CHECK(emission::limb_eddington(1.0) / emission::limb_eddington(0.0) == doctest::Approx(1.0 + 2.06).epsilon(1e-12));
-  CHECK(emission::limb_eddington(0.0) < 1.0);
-  CHECK(emission::limb_eddington(1.0) > 1.0);
+  CHECK(s_ch == doctest::Approx(1.0).epsilon(1e-9));
+  CHECK(s_ed == doctest::Approx(1.0).epsilon(1e-9));
+  CHECK(emission::limb_chandrasekhar(1.0) / emission::limb_chandrasekhar(0.0) == doctest::Approx(1.0 + 2.06).epsilon(1e-12));
+  CHECK(emission::limb_eddington_grey(1.0) / emission::limb_eddington_grey(0.0) == doctest::Approx(2.5).epsilon(1e-12));
+  CHECK(emission::limb_eddington(0.4) == emission::limb_chandrasekhar(0.4));
+  CHECK(emission::limb_chandrasekhar(0.0) < 1.0);
+  CHECK(emission::limb_chandrasekhar(1.0) > 1.0);
 }
 
 TEST_CASE("emission: emitter_mu is 0 for Q = 0 and 1/gamma for the L = 0 turning-point photon (Schwarzschild closed form)") {

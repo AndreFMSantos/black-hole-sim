@@ -93,9 +93,10 @@ struct Params {
   double munit = 1e26;             // M_unit (g): rho_unit = M_unit / L^3, L = G M_BH / c^2 (--mbh); n_e = rho rho_unit/(m_p + m_e), B_G = |b| c sqrt(4 pi rho_unit)
   int emission = 0;                // v2.2b3: 0 Dexter 2016 (ultra-relativistic, Theta_e > 3), 1 Leung et al. 2011 (K_2(1/Theta_e), Theta_e >~ 0.5)
   double theta_e_min = 0.3;        // no emission below this Theta_e
-  int electrons = 0;               // 0: Theta_e = Theta (m_p/m_e)/(1 + Ti/Te) (pyharm); 1: R_high/R_low (Ti/Te = (R_high beta^2 + 1)/(1 + beta^2)); 2: Theta_e = th_e_ratio Theta
+  int electrons = 0;               // 0: const; 1: R_high (EHT convention, backport from v4.0); 2: prop; 3: rhigh-single (legacy)
   double rhigh = 20.0, th_e_ratio = 1.0;
   double grmhd_rcap = 60.0;        // v2.2f-d: radius beyond which the GRMHD ray marching skips (empty space; the emission ends at r ~ 30); measured in notes/physics/22f-b
+  double grmhd_sigma_cut = 0.0;    // Backport from v4.0 E3: zero GRMHD emission where sigma = b^2/rho > cut (0 = off; UI default = 1)
   double grmhd_step = 0.05;        // GRMHD mode: maximum step along the ray = grmhd_step * r (M), the FMKS radial cell has r dX1 = 0.022 r; <= 2 M
   bool debug_null = false;         // test: check the photon null condition in KS in GRMHD mode
   bool expose_physical = false;    // fixed exposure (reference: black body f = 1 at tpeak) instead of renormalised to each LUT

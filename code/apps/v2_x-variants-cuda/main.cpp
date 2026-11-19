@@ -228,7 +228,7 @@ static Cli parse(int argc, char** argv) {
     else if (is("--flux-target")) c.flux_target = std::atof(argv[++i]);
     else if (is("--radio-out")) c.radio_out = argv[++i];
     else if (is("--munit")) p.munit = std::max(1.0, std::atof(argv[++i]));
-    else if (is("--electrons")) { const char* m = argv[++i]; p.electrons = std::strcmp(m, "rhigh") == 0 ? 1 : std::strcmp(m, "prop") == 0 ? 2 : 0; }
+    else if (is("--electrons")) { const char* m = argv[++i]; p.electrons = std::strcmp(m, "rhigh") == 0 ? 1 : std::strcmp(m, "prop") == 0 ? 2 : std::strcmp(m, "rhigh-single") == 0 ? 3 : 0; }
     else if (is("--rhigh")) p.rhigh = std::max(1.0, std::atof(argv[++i]));
     else if (is("--th-e-ratio")) p.th_e_ratio = std::max(0.0, std::atof(argv[++i]));
     else if (is("--torus")) { if (std::sscanf(argv[++i], "%lf,%lf,%lf", &p.torus_rin, &p.torus_rmax, &p.torus_gamma) < 2) { std::fprintf(stderr, "--torus rin,rmax[,gamma]\n"); std::exit(1); } }

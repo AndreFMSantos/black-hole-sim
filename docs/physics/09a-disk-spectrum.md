@@ -10,9 +10,9 @@ First step of roadmap-v0.9-v1.1. **Everything is opt-in and physical; the defaul
 ## What was added
 | Piece | Formula | Where |
 |---|---|---|
-| **Hardened spectrum** | `I_ν = f⁻⁴ B_ν(f·T)`; the `f⁻⁴` keeps the bolometric radiance `∫I_ν dν = σT⁴/π` for any f. `f_col ≈ 1.5–2` in stellar disks (Shimura & Takahara 1995) | `core/include/bhs/disk_emission.hpp` (`modified_planck_nu`, `rgb_hardened`), `lut::build(fcol)` |
+| **Hardened spectrum** | `I_ν = f⁻⁴ B_ν(f·T)`; the `f⁻⁴` keeps the bolometric radiance `∫I_ν dν = σT⁴/π` for any f. `f_col ≈ 1.7–2.0` near Eddington (Shimura & Takahara 1995, ApJ 445:780, eq. 1; does not apply at `ṁ < 1 %` Eddington) | `core/include/bhs/disk_emission.hpp` (`modified_planck_nu`, `rgb_hardened`), `lut::build(fcol)` |
 | **Redshift** | `I_ν/ν³` invariant ⇒ the observed spectrum is the same modified black body at `T_obs = g·T` (v0.4 already used this), and the observed bolometric scales as `g⁴` | already in the kernel; now tested |
-| **Eddington limb darkening** | `I(μ) = B (1 + 2.06 μ)/(1 + 2.06·2/3)`; the normalisation leaves the flux `2∫I μ dμ = πB` (= σT⁴) unchanged | `limb_eddington`, kernel `render.cu` |
+| **Electron-scattering limb darkening (Chandrasekhar 1960)** | `I(μ) = B (1 + 2.06 μ)/(1 + 2.06·2/3)` (Chandrasekhar 1960, *Radiative Transfer*, Table XXIV, p. 248: `I(1)/I(0) = 3.0631`; grey Eddington is `1 + 1.5 μ`). Normalisation leaves `2∫I μ dμ = πB` (= σT⁴) unchanged | `limb_chandrasekhar` (alias `limb_eddington`), `limb_eddington_grey`, kernel `render.cu` |
 | **μ in the gas frame** | on the equator `Θ = Q`, so `p^(θ) = √Q/r`; a boost along `e_φ` (the gas motion) does not touch this component, only the energy `E_emit = −p·u = uᵗ(1 − ΩL)` ⇒ `μ = √Q / (r·uᵗ(1 − ΩL))` | `emitter_mu`; `kerr::Trace` and the device `Trace` now return `Q` |
 | **Physical exposure** | `--expose relative` (default): brightness is renormalised to the peak of each LUT (as in v0.6a); `--expose physical`: fixed reference (black body f = 1 at `tpeak`), so `--fcol`/`--limb` change the brightness as in physics | `make_kp` in `render.cu` |
 

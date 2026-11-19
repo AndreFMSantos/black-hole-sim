@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Generates a SYNTHETIC .bgm from the analytic Fishbone-Moncrief torus (a = 0, where Kerr-Schild and Boyer-Lindquist coincide in r, theta, phi),
+"""Generates a SYNTHETIC .bgm from the analytic Fishbone-Moncrief torus (any spin a: because the torus is axisymmetric
+with u^r = b^r = 0, contravariant u^t, u^phi, b^t, b^phi coincide in Kerr-Schild and Boyer-Lindquist),
 on the same FMKS grid as the Illinois dumps, to validate the GRMHD reader end to end against the analytic renderer (--disk-model torus).
 Implementation INDEPENDENT of the C++ (numpy): l_K(r_max), |u_t|, enthalpy, 4-velocity, toroidal field of constant beta.
 
-Usage: uv run --with numpy python -I tools/make_torus_dump.py out.bgm [rin=7 rmax=12 theta_e_max=20 beta=3]
+Usage: uv run --with numpy python -I tools/make_torus_dump.py out.bgm [rin=7 rmax=12 theta_e_max=20 beta=3 a=0.0]
 Dump units: rho = rho~ (maximum 1); the render uses M_unit such that rho_unit = ne0 (m_p + m_e) (see notes/physics/22f-grmhd-snapshot.md).
 |b|^2 = 2 rho (m_p thI + m_e thE) / (beta (m_p + m_e))  =>  B_G = |b| c sqrt(4 pi rho_unit) = sqrt(8 pi P / beta) with P = n_e c^2 (m_p thI + m_e thE).
 """
@@ -21,7 +22,7 @@ rmax = float(sys.argv[3]) if len(sys.argv) > 3 else 12.0
 th_e_max = float(sys.argv[4]) if len(sys.argv) > 4 else 20.0
 beta = float(sys.argv[5]) if len(sys.argv) > 5 else 3.0
 gam = 4.0 / 3.0
-a = 0.0
+a = float(sys.argv[6]) if len(sys.argv) > 6 else 0.0
 p = dict(a=a, hslope=0.3, mks_smooth=0.5, poly_alpha=14.0, poly_xt=0.82, startx1=0.5721548105021682)
 n1, n2, n3 = 288, 128, 128
 dx1, dx2, dx3 = 0.02199861273777767, 1.0 / 128, 2 * np.pi / 128
@@ -56,8 +57,14 @@ thI = np.where(inside, (gam - 1) / gam * (h - 1), 0.0)
 thE = th_e_max * np.where(inside, (h - 1) / (hmax - 1), 0.0)
 absb2 = 2 * rho * (MP * thI + ME * thE) / (beta * (MP + ME))
 ut_low = -ut_abs
-ut_up = np.where(inside, ut_low * (itt - ell * itp), 1.0 / np.sqrt(np.maximum(1e-3, 1 - 2 / r)))   # outside the torus: static gas
-uph_up = np.where(inside, ut_low * (itp - ell * ipp), 0.0)
+# outside the torus: ZAMO four-velocity (valid down to the horizon even inside the ergosphere for a != 0)
+Sig = r * r + a * a * np.cos(th) ** 2
+Del = np.maximum(1e-6, r * r - 2 * r + a * a)
+A_k = (r * r + a * a) ** 2 - a * a * Del * (np.sin(th) ** 2)
+alpha_z = np.sqrt(np.maximum(1e-6, Sig * Del / A_k))
+omega_z = 2 * a * r / A_k
+ut_up = np.where(inside, ut_low * (itt - ell * itp), 1.0 / alpha_z)
+uph_up = np.where(inside, ut_low * (itp - ell * ipp), omega_z / alpha_z)
 bn = np.sqrt(np.maximum(gtt * ell * ell + 2 * gtp * ell + gpp, 1e-30))
 floor = 1e-30
 D = np.zeros((n1, n2, n3, 12), dtype=np.float32)

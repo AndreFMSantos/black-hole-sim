@@ -17,8 +17,12 @@ import subprocess
 import sys
 from pathlib import Path
 
-import camera as C
-import segments as S
+import importlib
+C = importlib.import_module(os.environ.get('BHS_CAMERA', 'camera'))
+S = importlib.import_module(os.environ.get('BHS_SEGMENTS', 'segments'))
+V4 = os.environ.get('BHS_SEGMENTS') == 'segments_v4'
+GPU = 'v4_0-metric-api' if V4 else 'v3_1-kerr-cuda-ui'
+BW, BH = (3840, 2160) if V4 else (1920, 1080)   # v4: the GPU segments are rendered natively in 4K
 
 CODE = Path(__file__).resolve().parents[2]
 BIN = CODE / "build" / "apps"
@@ -68,11 +72,11 @@ def render_segment(seg, start, total, last, work, draft, hdr=False):
     out.mkdir(parents=True, exist_ok=True)
     meta_f = out / "meta.json"
     n = nframes(seg, last)
-    cam = C.Camera(C.REF_TOTAL)
+    cam = C.Camera(C.REF_TOTAL or total)
     div = 4 if draft else 1
     times = [start + (k + 0.5) / S.FPS for k in range(n)]
     meta = json.loads(meta_f.read_text()) if meta_f.exists() else {}
-    W, H = 1920 // div, 1080 // div
+    W, H = BW // div, BH // div
     if seg.tool == "rec2d":
         if (out / f"frame_{n - 1:05d}.png").exists():
             return
@@ -88,7 +92,7 @@ def render_segment(seg, start, total, last, work, draft, hdr=False):
         if m:
             meta["n"], meta["captured"] = m.group(1), m.group(2)
     elif seg.tool == "radio":  # v2.2b torus / v2.2g own GRMHD: false colour (T_b), one process per frame; GRMHD: linear blend of two consecutive snapshots
-        exe = BIN / "v3_1-kerr-cuda-ui" / "v3_1-kerr-cuda-ui"
+        exe = BIN / GPU / GPU
         bgm = (Path(_BHS_DATA) / "athenak/run_d/bgm")
         from PIL import Image
         import numpy as np
@@ -108,15 +112,19 @@ def render_segment(seg, start, total, last, work, draft, hdr=False):
                     d0, d1 = seg.args["d0"], seg.args["d1"]
                 u = d0 + (d1 - d0) * k / max(1, n - 1)
                 i0 = min(int(u), d1 - 1); fr = u - i0
+                if V4:  # v4.0 time interpolation between snapshots i0 and i0 + 1 (pattern speed 0.2 Keplerian) instead of blending PNGs
+                    run(base + ["--shot", f, "--grmhd", bgm / f"mad_{i0:05d}.bgm", "--grmhd-next", bgm / f"mad_{i0 + 1:05d}.bgm", "--grmhd-tau", f"{fr:.5f}", "--grmhd-dt", 2, "--grmhd-pattern", 0.2,
+                                "--disk-model", "grmhd", "--electrons", "rhigh", "--rhigh", 20, "--munit", 8.589e24, "--emission", "leung"])
+                    continue
                 imgs = []
                 for di in (i0, i0 + 1):
                     tmp = out / f"tmp_{k:05d}_{di}.png"
-                    run(base + ["--shot", tmp, "--grmhd", bgm / f"mad_{di:05d}.bgm", "--disk-model", "grmhd", "--electrons", "rhigh", "--rhigh", 20, "--munit", 7.361e24, "--emission", "leung"])
+                    run(base + ["--shot", tmp, "--grmhd", bgm / f"mad_{di:05d}.bgm", "--disk-model", "grmhd", "--electrons", "rhigh", "--rhigh", 20, "--munit", 8.589e24 if V4 else 7.361e24, "--emission", "leung"])
                     imgs.append(np.asarray(Image.open(tmp).convert("RGB")).astype(np.float64))
                     tmp.unlink()
                 Image.fromarray(np.round((1 - fr) * imgs[0] + fr * imgs[1]).astype(np.uint8)).save(f)
     elif seg.tool == "var":  # v2.1: parameter ramps (wormhole, charge, Lambda): one process per frame; SDR frames in PNG
-        exe = BIN / "v3_1-kerr-cuda-ui" / "v3_1-kerr-cuda-ui"
+        exe = BIN / GPU / GPU
         import math
         for k, t in enumerate(times):
             f = out / f"frame_{k:05d}.png"
@@ -129,10 +137,32 @@ def render_segment(seg, start, total, last, work, draft, hdr=False):
             if kind == "wh":
                 L = math.exp(math.log(14.0) + (math.log(2.4) - math.log(14.0)) * sm)
                 run(base + ["--wormhole", "interstellar", "--wh-l", f"{L:.5f}", "--fov", 50, "--sky2", os.path.join(_BHS_ROOT, "assets/sky/wise/wise_8k.exr"), "--exposure", 2, "--sky-exposure", 3])
+            elif kind == "whtravel":  # v4.0: the trip from one sky to the other, l = 14 cos(pi x) rho from +14 to -14 (slow at the ends, fastest at the throat)
+                L = 14.0 * math.cos(math.pi * x)
+                run(base + ["--wormhole", "interstellar", "--wh-l", f"{L:.5f}", "--fov", 60, "--sky2", os.path.join(_BHS_ROOT, "assets/sky/wise/wise_8k.exr"), "--exposure", 2, "--sky-exposure", 3])
+            elif kind == "rn" and V4:  # Kerr-Newman Novikov-Thorne disk (own ISCO), Q up to 0.95 (a real horizon)
+                run(base + ["--a", 0, "--charge", f"{0.95 * sm:.5f}", "--dist", 40, "--fov", 40, "--rout", 14, "--prec", "double", "--tol", "1e-8", "--bloom", 0.1, "--exposure", 2])
             elif kind == "rn":
                 run(base + ["--a", 0, "--charge", f"{1.1 * sm:.5f}", "--dist", 30, "--fov", 34, "--rin", 6, "--rout", 14, "--profile", "newtonian", "--nodoppler", "--prec", "double", "--tol", "1e-8", "--bloom", 0.1, "--exposure", 2])
+            elif V4:  # camera at 7 M, FOV 100, Lambda 0 -> 0.04 (r_c = 7.4 M at the end): the shadow stays smaller than the frame
+                run(base + ["--a", 0, "--lambda", f"{0.04 * sm:.6f}", "--dist", 7, "--fov", 100, "--nodisk", "--prec", "double", "--tol", "1e-8", "--exposure", 2])
             else:
                 run(base + ["--a", 0, "--lambda", f"{0.045 * sm:.6f}", "--dist", 5.5, "--fov", 70, "--nodisk", "--prec", "double", "--tol", "1e-8", "--exposure", 2])
+    elif seg.tool == "view":  # v4.0 views: spherical inflow, jet walls, X-ray lamppost (Kerr a = 0.9375, false colour)
+        exe = BIN / GPU / GPU
+        for k, t in enumerate(times):
+            f = out / f"frame_{k:05d}.png"
+            if f.exists():
+                continue
+            base = [exe, "--nohud", "--runs", 1, "--w", W, "--h", H, "--prec", "float", "--samples", 2 if draft else 6, "--shot", f, "--a", 0.9375, "--theta", f"{cam.theta(t):.6f}",
+                    "--phi", f"{cam.phi(t):.6f}", "--dist", 40, "--fov", 30, "--nosky"]
+            kind = seg.args["kind"]
+            if kind == "sph":
+                run(base + ["--disk-model", "spherical", "--sph-flow", "infall"])
+            elif kind == "cones":
+                run(base + ["--disk-model", "cones", "--fov", 50])
+            else:
+                run(base + ["--disk-model", "lamppost", "--lamppost-h", 6, "--lamppost-plunge"])
     elif seg.tool in ("cpu", "v05"):
         for k, t in enumerate(times):
             f = out / f"frame_{k:05d}.png"
@@ -155,9 +185,9 @@ def render_segment(seg, start, total, last, work, draft, hdr=False):
             return
         js = route_json(seg, start, total, n / S.FPS, cam, draft) if seg.tool == "route" else final_route_json(seg, start, n / S.FPS)
         (out / "route.json").write_text(json.dumps(js, indent=1))
-        w, h = (seg.args.get("w", 1920) // div, seg.args.get("h", 1080) // div)
-        cmd = [BIN / "v3_1-kerr-cuda-ui" / "v3_1-kerr-cuda-ui", "--route", out / "route.json", "--route-out", mov, "--codec", "prores", "--workdir", out / "chunks", "--resume",
-               "--w", w, "--h", h, "--samples", 2 if draft else seg.args["samples"], "--a", 0.9] + (["--hdr10", 1000] if hdr else []) + seg.args.get("flags", [])
+        w, h = (seg.args.get("w", BW) // div, seg.args.get("h", BH) // div)
+        cmd = [BIN / GPU / GPU, "--route", out / "route.json", "--route-out", mov, "--codec", "prores", "--workdir", out / "chunks", "--resume",
+               "--w", w, "--h", h, "--samples", 2 if draft else seg.args["samples"], "--a", seg.args.get("spin", 0.9)] + (["--hdr10", 1000] if hdr else []) + seg.args.get("flags", [])
         o = run(cmd)
         for line in o.splitlines():
             if line.startswith("waypoints:"):

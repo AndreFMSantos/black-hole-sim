@@ -4,12 +4,17 @@
 //
 // Spectrum: modified black body I_nu = f^-4 B_nu(f T). The f^-4 factor keeps the bolometric radiance
 // integral(I_nu dnu) = sigma T^4 / pi independent of f (the atmosphere only redistributes the energy to higher
-// frequencies; f_col ~ 1.5-2 in stellar disks, Shimura & Takahara 1995). With I_nu/nu^3 invariant, the spectrum seen
-// after the shift g is the same modified black body at T_obs = g T (v0.4 already used this), and the observed
-// bolometric scales as g^4.
+// frequencies; f_col ~ 1.7-2.0 near Eddington, Shimura & Takahara 1995 ApJ 445:780, eq. 1). With I_nu/nu^3 invariant,
+// the spectrum seen after the shift g is the same modified black body at T_obs = g T (v0.4 already used this), and
+// the observed bolometric scales as g^4.
 //
-// Eddington limb darkening: I(mu) = B (1 + 2.06 mu) / (1 + 2.06 * 2/3), mu = cos of the angle between the ray and the disk normal
-// IN THE GAS FRAME. The normalisation leaves the emergent flux 2 int I mu dmu = pi B unchanged (= sigma T^4).
+// Limb darkening (mu = cos of the angle between the ray and the disk normal IN THE GAS FRAME):
+// - Chandrasekhar (1960, Radiative Transfer, Table XXIV, p. 248) electron-scattering atmosphere:
+//     I(1)/I(0) = 1.26938 / 0.41441 = 3.0631 -> linear approximation I(mu) = B (1 + 2.06 mu) / (1 + 2.06 * 2/3).
+// - Grey Eddington approximation:
+//     I(mu) = B (1 + 1.5 mu) / 2  (I(1)/I(0) = 2.5).
+// Both normalisations leave the emergent flux 2 int_0^1 I(mu) mu dmu = pi B unchanged (= sigma T^4).
+// Note: `limb_eddington` is kept as an alias of `limb_chandrasekhar` for backwards compatibility with v0.9a-v3.1.
 #include <cmath>
 
 #include "blackbody.hpp"
@@ -36,7 +41,10 @@ inline Vec3 rgb_hardened(double T, double fcol) {
   return {k * c.x, k * c.y, k * c.z};
 }
 
-inline double limb_eddington(double mu) { return (1.0 + 2.06 * mu) / (1.0 + 2.06 * 2.0 / 3.0); }
+inline double limb_chandrasekhar(double mu) { return (1.0 + 2.06 * mu) / (1.0 + 2.06 * 2.0 / 3.0); }
+inline double limb_eddington_grey(double mu) { return (1.0 + 1.5 * mu) / 2.0; }
+// Backwards-compatible alias (v0.9a-v3.1 used 1 + 2.06 mu under this name; that coefficient is Chandrasekhar 1960 Table XXIV).
+inline double limb_eddington(double mu) { return limb_chandrasekhar(mu); }
 
 // mu in the gas frame (Kerr equatorial circular orbit) for a photon with L = L_z/E and Carter constant Q
 // (E = 1 at infinity). On the equator Theta = Q, so the tetrad component p^(theta) = sqrt(Q)/r; a boost along

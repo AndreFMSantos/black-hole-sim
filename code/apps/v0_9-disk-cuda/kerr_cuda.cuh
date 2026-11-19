@@ -201,8 +201,12 @@ __device__ void trace(double a, double r0, double theta0, double nr, double nth,
     // mu and sigma = 1 - mu^2 are redundant: near the pole (sigma < 1/2) sigma rules (relative precision), otherwise mu
     if (yn[5] < S(0.5)) yn[2] = copysign(sqrt(fmax(S(1) - yn[5], S(0))), yn[2]);
     else yn[5] = S(1) - yn[2] * yn[2];
-    yn[1] = copysign(sqrt(fmax(Rf(yn[0], cS), S(0))), yn1);
-    yn[3] = copysign(sqrt(fmax(Mf(yn[2], yn[5], cS), S(0))), yn3);
+    // Backport (v4.0 O3): conditional velocity reprojection (avoid ill-conditioned sqrt near turning points)
+    {
+      const S tolr = S(at) + S(rt) * fabs(yn[0]), tolm = S(at) + S(rt) * fabs(yn[2]);
+      if (yn1 * yn1 >= S(200) * fabs(S(k7[1])) * tolr) yn[1] = copysign(sqrt(fmax(Rf(yn[0], cS), S(0))), yn1);
+      if (yn3 * yn3 >= S(200) * fabs(S(k7[3])) * tolm || yn[5] < S(0.1)) yn[3] = copysign(sqrt(fmax(Mf(yn[2], yn[5], cS), S(0))), yn3);
+    }
 
     if (!Vol::kActive && disk_on && !out.disk_hit && (y[2] > S(0)) != (yn[2] > S(0))) {
       S lo = 0, hi = 1;

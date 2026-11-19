@@ -34,5 +34,19 @@ Before, `--electrons rhigh` used Θe = Θi (m_p/m_e)/(1 + R) with Θi = (γ−1)
 - The −8 % left is most likely the order of interpolation (not proved): ipole computes Θe per cell and interpolates Θe; we interpolate β and Θi and compute R(β) after, and R is non-linear in β (with a constant T_p/T_e, linear, the difference is −1.6 %). Neither order is more correct; matching ipole would need 8 fetches per sample instead of the hardware trilinear.
 - **Recalibrated scenarios** (same settings as the UI: 230 GHz, Leung, float, r_cap 30, our MAD a = 0.9375 dump 350): M87* (R_high = 20, i = 17°) `M_unit = 8.589e24 g` → 0.5001 Jy, ring 9.90 M = 37.8 µas (EHT 42); Sgr A* (R_high = 160, i = 30°) `M_unit = 5.003e17 g` → 2.401 Jy, ring 9.90 M = 49.8 µas (EHT 51.8 ± 2.3). The old M87* value (7.361e24) gave 0.333 Jy with the current code even in the old convention: that calibration was already stale.
 
+## Update (2026-11-19): `a = +0.9375` benchmark & proof of the `R_high` interpolation-order hypothesis
+
+1. **Spin `a = +0.9375` (`MAD_a+0.94`, frame 5500, `torus.out0.05500.h5` → `MAD_a094_5500.bgm`, same setup as above, 160², double):**
+   | Model | `ipole` | ours | ours / `ipole` | L1 | >10 % peak median (p10–p90) |
+   |---|---|---|---|---|---|
+   | Constant `T_p/T_e = 3` (`--electrons prop --th-e-ratio 734.461`) | `0.10762 Jy` | **`0.10813 Jy`** | **`1.0047` (+0.47 %)** | **0.0545** | `1.0012` (`0.931`–`1.066`) |
+   | `R_high = 20` (`--electrons rhigh`, post-interp `R(β)`) | `0.06468 Jy` | `0.06094 Jy` | `0.942` (−5.8 %) | 0.1064 | `1.073` (`0.946`–`1.292`) |
+   This externally validates `φ_KS ↔ φ_BL`, frame dragging, `p_r^KS = p_r^BL + (2r − aL)/Δ`, FMKS inverse, and synchrotron transfer at high spin (`a = 0.9375`) to **0.5 %** in flux.
+2. **Proof of the `R_high = 20` interpolation-order hypothesis (`MAD_a0`, frame 5500):**
+   - Pre-computing `Θ_e = Θ_i · (m_p/m_e)(2/3)/(γ−1) / (2 + R(β))` per cell in a temporary `.bgm` and rendering with `--electrons prop --th-e-ratio 1` (so the hardware trilinear filter interpolates `Θ_e` directly, as `ipole` does) gives **`0.026067 Jy` vs `0.026156 Jy` (`−0.34 %`)**, dropping L1 from `13.5 %` to **`8.4 %`** and median pixel ratio to **`0.988`** (`p10 0.881`, `p90 1.091`).
+   - This **proves** the `−8.4 %` (`a = 0`) / `−5.8 %` (`a = 0.94`) offset is 100 % interpolation order (`interpolate(Θ_e)` vs `Θ_e(interpolate(Θ_i, β))`), with zero physics or emissivity error. We keep hardware trilinear interpolation of `(ρ, Θ_i, |b|, β)` so the live UI `R_high` slider and 3-slot async streaming stay free of extra VRAM/re-uploads.
+3. **Synthetic torus oracle at `a = 0.9` (`tools/make_torus_dump.py`, `i = 60°`, double):**
+   - Analytic BL torus (`3.179 Jy`) vs GRMHD KS reader (`3.173 Jy`): **total ratio `0.99824` (`−0.18 %`)**, median per-pixel relative error **`1.57e-3`** (`p95 6.32e-3`, 19 843 active pixels).
+
 ## Reproduce
 `code/tools/ipole/run_compare.sh [outdir]` with `IPOLE=<ipole binary>` (ipole commit `7f7a482`, built with its makefile; needs GSL and HDF5) and the snapshot + its `.bgm`; prints both fluxes and the image statistics (`compare_images.py`, numpy + h5py).

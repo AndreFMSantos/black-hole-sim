@@ -47,8 +47,7 @@ Scale: M87* θ_g = 3.819 µas (paper: 3.8 ± 0.4); Sgr A* 5.03 µas (paper, Tabl
 
 ## Limitations
 - One snapshot (a = 0, R_high = 20 fixed); the real EHT calibration is over time series and a library of models. M_unit **changes with the frame** (the flux fluctuates).
-- No ṁ: the `M_unit → Ṁ` conversion needs the mass-flux calculation at the dump's horizon; not done.
-- The values of Papers II–IV (Sgr A*) and IV (M87*) were not read.
+- **Updated 2026-11-19 (`ṁ` & EHT Papers II–IV):** from our AthenaK `10⁴ M` MAD history (`torus.user.hst`, `t ∈ [5000, 10000] M`), `⟨Φ/√ṁ⟩ = 14.94` (HL) = `53.0` (Gaussian), giving `Ṁ = 7.21e-5 M☉/yr` (`5.0e-7 Ṁ_Edd`) for M87* (`M_unit = 8.589e24 g`) and `6.59e-9 M☉/yr` for Sgr A* (`M_unit = 5.003e17 g`, inside EHT Paper V best-bet `(5.2–9.5)e-9 M☉/yr`). EHT Sgr A* Papers II–V and M87* IV–VI, VIII have been read (`lit-verification.md`).
 
 ## Commands
 ```bash

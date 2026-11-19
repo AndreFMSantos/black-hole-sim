@@ -73,6 +73,8 @@ V4_CHANGED = {"kerr-infall-observer-float", "kerr-infall-observer-double",
               # O3 + fixes (2026-11-17, notes/physics/33-dop853.md): DOP853 on the double thin-disk path (calibrated, no worse than DP45 in every quantile)
               # and the reprojection only where well conditioned: 1-level changes in a few pixels of the double images (more accurate rays)
               "kerr-newman-double", "kerr-orbit-observer-double", "reissner-nordstrom-double", "naked-singularity-double",
+              # Backport of O3 reprojection to v3_1 (2026-11-19) shifted 1 pixel by 1 level vs v4_0 (O1/O2/O6)
+              "kerr-thick-layer-double",
               # Schwarzschild-de Sitter: the initial dr/dtau lacked the Lambda term since v2.1c (sky errors up to 7e-2 rad in the disk scene, 270 rays with a
               # wrong fate in 36864) and the exit at 0.9999 r_c was not interpolated: both images of each SdS case are new (physics fix)
               "sds-shadow-double", "sds-shadow-float", "sds-disk-double", "sds-disk-float"}

@@ -155,7 +155,7 @@ Image:      --samples N          jittered sub-pixel samples (R2 per quad, seed -
             --edge-soft s        (v0.9a2) soft outer edge: emission decays (smoothstep) between rout(1-s) and rout(1+s); the gas becomes semi-transparent (the ray continues behind it); 0 = hard cut (default)
             --edge-noise a       (v0.9a2) irregular edge: edge radius rout(1 + a(2n-1)), n = azimuth noise (0..0.5); 0 = circle
             --fcol f             (v0.9a, physical) spectral hardening factor: I = f^-4 B(f T), same bolometric flux; 1 = black body (default), 1.5-2 = stellar disk
-            --limb none|eddington  (v0.9a, physical) limb darkening I ~ 1 + 2.06 mu (mu in the gas frame); flux conserved
+            --limb none|chandrasekhar|eddington  (v0.9a, physical) electron-scattering limb darkening I ~ 1 + 2.06 mu (Chandrasekhar 1960, Table XXIV; eddington is an alias); flux conserved
             --expose relative|physical  relative (default): brightness renormalised to the peak of each LUT; physical: fixed exposure (ref. f = 1), --fcol/--limb change the brightness
             --beaming s          AESTHETIC, NOT PHYSICAL: g -> g^s only in the disk intensity (s < 1 reduces the Doppler asymmetry)
             --disk-tex amp[,fr,fphi,oct]   (v2.4) filamentary texture of the THIN disk: amp = contrast (lognormal, ~0.6-1.2), fr/fphi = radial (in ln r) and azimuthal frequencies (fr >> fphi stretches in azimuth), oct octaves; with --time the pattern is sheared by Omega(r)
@@ -346,7 +346,7 @@ static Cli parse(int argc, char** argv) {
     else if (is("--edge-soft")) p.edge_soft = std::max(0.0, std::min(0.9, std::atof(argv[++i])));
     else if (is("--edge-noise")) p.edge_noise = std::max(0.0, std::min(0.5, std::atof(argv[++i])));
     else if (is("--fcol")) p.fcol = std::max(0.5, std::atof(argv[++i]));
-    else if (is("--limb")) p.limb = std::strcmp(argv[++i], "eddington") == 0;
+    else if (is("--limb")) { const char* m = argv[++i]; p.limb = std::strcmp(m, "eddington") == 0 || std::strcmp(m, "chandrasekhar") == 0; }
     else if (is("--expose")) p.expose_physical = std::strcmp(argv[++i], "physical") == 0;
     else if (is("--glare")) p.glare = std::atof(argv[++i]);
     else if (is("--glare-thr")) p.glare_thr = std::atof(argv[++i]);

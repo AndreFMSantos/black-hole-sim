@@ -54,7 +54,7 @@ struct KP {
   cudaTextureObject_t g_theta_lut = 0;  // v2.2h: X2(X1, theta) LUT (linear filter) + 2 Newton steps instead of 40 iterations
   cudaTextureObject_t g_tex[3];  // v2.2f: (rho, theta_i, |b|, beta), u^mu KS, bhat^mu KS (hardware trilinear filter)
   int g_n1, g_n2, g_n3, el_model;
-  double g_startx1, g_dx1, g_hslope, g_ms, g_palpha, g_pxt, g_pnorm, g_rho_unit, g_b_unit, g_rhigh, g_ce, g_rcap, g_gam;
+  double g_startx1, g_dx1, g_hslope, g_ms, g_palpha, g_pxt, g_pnorm, g_rho_unit, g_b_unit, g_rhigh, g_ce, g_rcap, g_gam, g_te_c;
   int model;  // v2.2b: 0 layer, 1 torus with synchrotron
   double t_ell, t_utin, t_hmax, t_gamma, t_rin, t_rmax, ne0, pbeta, ti_te, nu_obs, mcm, tb_lo, tb_hi, th_e_max, t_step, g_step, the_min;
   int emis;
@@ -533,7 +533,8 @@ struct VolAccT {
     const float g = float(eobs) * float(dop) / E, thI = o.thI;
     float thE;
     if (p.el_model == 2) thE = float(p.g_ce) * thI;
-    else if (p.el_model == 1) { const float b2 = o.beta * o.beta; const float tite = (float(p.g_rhigh) * b2 + 1.f) / (1.f + b2); thE = thI * float(synch::kMp / synch::kMe) / (1.f + tite); }
+    else if (p.el_model == 1) { const float b2 = o.beta * o.beta; const float R = (float(p.g_rhigh) * b2 + 1.f) / (1.f + b2); thE = thI * float(p.g_te_c) / (2.f + R); }
+    else if (p.el_model == 3) { const float b2 = o.beta * o.beta; const float tite = (float(p.g_rhigh) * b2 + 1.f) / (1.f + b2); thE = thI * float(synch::kMp / synch::kMe) / (1.f + tite); }
     else thE = thI * float(synch::kMp / synch::kMe) / (1.f + float(p.ti_te));
     if (thE < float(p.the_min) || sinB <= 0.f) return;
     // v2.2h: all the transport in float (FP64 is 1/64 of the rate on the RTX 5080); the intervals fit in float (j ~ 1e-14..1e-22, ds ~ 1e14 cm)
@@ -1248,6 +1249,7 @@ KP make_kp(const Params& p) {
     k.a = h.a;
     k.g_n1 = int(h.n1); k.g_n2 = int(h.n2); k.g_n3 = int(h.n3); k.g_startx1 = h.startx1; k.g_dx1 = h.dx1;
     k.g_hslope = h.hslope; k.g_ms = h.mks_smooth; k.g_palpha = h.poly_alpha; k.g_pxt = h.poly_xt; k.g_pnorm = h.fmks().poly_norm(); k.g_gam = h.gam;
+    k.g_te_c = (synch::kMp / synch::kMe) * (2.0 / 3.0) / std::max(1e-6, h.gam - 1.0);
     for (int i = 0; i < 3; ++i) k.g_tex[i] = S.grm_tex[i];
     k.g_theta_lut = p.theta_lut ? S.grm_theta_tex : 0;
     k.g_rho_unit = p.munit / (k.mcm * k.mcm * k.mcm); k.g_b_unit = synch::kC * std::sqrt(4.0 * M_PI * k.g_rho_unit);

@@ -163,7 +163,7 @@ __device__ double nt_temp(const KP& p, double r) {
   return (1 - f) * double(p.nt_tab[i]) + f * double(p.nt_tab[i + 1]);
 }
 
-// disk_emission.hpp: mu in the gas frame and Eddington limb darkening (flux conserved)
+// disk_emission.hpp: mu in the gas frame and Chandrasekhar (1960, Table XXIV) electron-scattering limb darkening (flux conserved)
 __device__ double emitter_mu_d(double a, double r, double L, double Q) {
   const double r32 = pow(r, 1.5);
   const double ut = (r32 + a) / (pow(r, 0.75) * sqrt(r32 - 3.0 * sqrt(r) + 2.0 * a));

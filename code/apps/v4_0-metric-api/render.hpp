@@ -63,7 +63,7 @@ struct Params {
   double beaming = 1.0;            // g -> g^beaming in the disk intensity: 1 = physical, < 1 = AESTHETIC (cinematic)
   // v0.9a: disk spectrum and colour (default = v0.8 byte-identical)
   double fcol = 1.0;               // hardening factor: I_nu = f^-4 B_nu(f T) (bolometric unchanged); physical, ~1.5-2 in stellar disks
-  bool limb = false;               // Eddington limb darkening I(mu) ~ 1 + 2.06 mu (mu in the gas frame; flux conserved)
+  bool limb = false;               // Chandrasekhar (1960, Table XXIV) electron-scattering limb darkening I(mu) ~ 1 + 2.06 mu (mu in gas frame; flux conserved)
   // v0.9a2: outer edge (default = v0.8 hard cut, byte-identical)
   double edge_soft = 0.0;          // relative half-width of the emission decay (smoothstep in r_e(1 +- s)); 0 = hard cut
   double edge_noise = 0.0;         // edge irregularity: r_e = rout (1 + amp (2n - 1)), n = azimuth noise

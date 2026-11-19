@@ -84,12 +84,12 @@ static const Scenario kScenarios[] = {
      }},
     {"Own GRMHD (M87*, MAD a = 0.9375)", "v2.2g", Badge::ModelDependent, "Our own AthenaK simulation, calibrated to 0.5 Jy (model scale of EHT Paper V; measured ~0.66 Jy). Ring = Kerr critical curve.",
      [](Setup& s) {
-       radio_common(s); auto& p = s.p; p.model = 2; p.electrons = 1; p.rhigh = 20; p.munit = 7.361e24; p.emission = 1;
+       radio_common(s); auto& p = s.p; p.model = 2; p.electrons = 1; p.rhigh = 20; p.munit = 8.589e24; p.grmhd_sigma_cut = 1.0; p.emission = 1;
        s.grmhd = BHS_DATA_DEFAULT "/athenak/run_d/bgm_hi/mad_00350.bgm";
      }},
-    {"Own GRMHD as Sgr A* (EHT best guess)", "v2.2g", Badge::ModelDependent, "MAD, R_high = 160, i = 30 degrees, M = 4.14e6 Msun at 8127 pc (values from the EHT Paper V simulations, not the measurement), calibrated to 2.4 Jy. Ring 50.8 uas vs 51.8 +- 2.3 from the EHT.",
+    {"Own GRMHD as Sgr A* (EHT best guess)", "v2.2g", Badge::ModelDependent, "MAD, R_high = 160, i = 30 degrees, M = 4.14e6 Msun at 8127 pc (values from the EHT Paper V simulations, not the measurement), calibrated to 2.4 Jy. Ring 49.8 uas vs 51.8 +- 2.3 from the EHT.",
      [](Setup& s) {
-       radio_common(s); auto& p = s.p; p.model = 2; p.electrons = 1; p.rhigh = 160; p.munit = 3.546e17; p.emission = 1; p.mbh = 4.14e6; s.cam = {30, 0, 150};
+       radio_common(s); auto& p = s.p; p.model = 2; p.electrons = 1; p.rhigh = 160; p.munit = 5.003e17; p.grmhd_sigma_cut = 1.0; p.emission = 1; p.mbh = 4.14e6; s.cam = {30, 0, 150};
        s.grmhd = BHS_DATA_DEFAULT "/athenak/run_d/bgm_hi/mad_00350.bgm";
      }},
 };
@@ -215,15 +215,16 @@ Request draw(State& st, kcuda::Params& p, Camera& cam, std::string& observer, bo
     if (ImGui::Combo("Type", &nd, dks, restricted ? 3 : 6) && nd != dk) {
       p.nodisk = nd == 0; p.model = nd == 4 ? 1 : nd == 5 ? 2 : 0; p.nt = nd == 1; p.hr = nd == 3 ? 0.06 : 0; if (nd == 3) { p.tau = 4; p.flare = 0.15; p.nt = true; }
       if (nd == 4 || nd == 5) { p.nodisk = false; p.fov_deg = 16; cam.dist = std::max(cam.dist, 150.0); p.mbh = 6.5e9; p.nu_ghz = 230; p.tb_lo = 8.5; p.tb_hi = 11; p.prec = kcuda::Precision::Float; p.tol = 2e-5; p.nt = false;
-        if (nd == 4) { p.torus_rin = 7; p.torus_rmax = 12; p.ne0 = 3e4; p.plasma_beta = 3; p.theta_e_max = 20; } else { p.electrons = 1; p.emission = 1; p.munit = 7.361e24; p.grmhd_rcap = 30; } }
+        if (nd == 4) { p.torus_rin = 7; p.torus_rmax = 12; p.ne0 = 3e4; p.plasma_beta = 3; p.theta_e_max = 20; } else { p.electrons = 1; p.emission = 1; p.munit = 8.589e24; p.grmhd_rcap = 30; p.grmhd_sigma_cut = 1.0; } }
     }
     if (!p.nodisk && p.model == 0) { float ro = float(p.rout); if (ImGui::SliderFloat("outer radius", &ro, 8.f, 80.f)) p.rout = ro; }
     if (p.hr > 0) { float h = float(p.hr), t = float(p.tau), f = float(p.flare); ImGui::SliderFloat("H/r", &h, 0.01f, 0.2f); ImGui::SliderFloat("tau", &t, 0.5f, 10.f); ImGui::SliderFloat("flare", &f, 0.f, 0.5f); p.hr = h; p.tau = t; p.flare = f; }
     if (p.model == 1) { float n = float(std::log10(p.ne0)), be = float(p.plasma_beta), te = float(p.theta_e_max); if (ImGui::SliderFloat("log10 n_e0", &n, 3.f, 7.f)) p.ne0 = std::pow(10.0, n); ImGui::SliderFloat("beta", &be, 0.5f, 30.f); ImGui::SliderFloat("Theta_e max", &te, 5.f, 40.f); p.plasma_beta = be; p.theta_e_max = te; }
     if (p.model == 2) {
-      float rh = float(p.rhigh), mu = float(std::log10(p.munit)), tl = float(p.tb_lo), th = float(p.tb_hi);
+      float rh = float(p.rhigh), mu = float(std::log10(p.munit)), sc = float(p.grmhd_sigma_cut), tl = float(p.tb_lo), th = float(p.tb_hi);
       if (ImGui::SliderFloat("R_high", &rh, 1.f, 160.f, "%.0f", ImGuiSliderFlags_Logarithmic)) p.rhigh = rh;
       if (ImGui::SliderFloat("log10 M_unit [g]", &mu, 23.f, 27.f)) p.munit = std::pow(10.0, mu);
+      if (ImGui::SliderFloat("sigma cut (0=off)", &sc, 0.f, 30.f, "%.1f")) p.grmhd_sigma_cut = sc;
       ImGui::SliderFloat("T_b min (log)", &tl, 6.f, 11.f); ImGui::SliderFloat("T_b max (log)", &th, 8.f, 12.f); p.tb_lo = tl; p.tb_hi = std::max<double>(th, tl + 0.5);
       char buf[512]; std::snprintf(buf, sizeof buf, "%s", st.dump_dir.c_str());
       if (ImGui::InputText("dump folder", buf, sizeof buf)) { st.dump_dir = buf; scan_dumps(st); }

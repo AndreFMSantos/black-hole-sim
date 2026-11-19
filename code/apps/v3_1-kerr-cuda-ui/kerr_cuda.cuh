@@ -189,19 +189,20 @@ __device__ void trace(double a, double r0, double theta0, double nr, double nth,
   int skipped = 0;
   if constexpr (Vol::kActive) vol->begin(in.L, in.Q);
   const double disc = 1.0 - a * a - q2;  // < 0: naked singularity (no horizon): rays reaching r_min = 0.05 are given as absorbed (black)
-  double r_plus = disc >= 0.0 ? 1.0 + sqrt(disc) : 0.0, r_far_eff = r_far;
+  double r_plus = disc >= 0.0 ? 1.0 + sqrt(disc) : 0.0, r_far_eff = r_far, r_c = r_far;
   if (lam > 0.0) {  // Schwarzschild-de Sitter (a = q2 = 0, 0 < Lambda < 1/9): the black-hole and cosmological horizons (roots of Lambda r^3/3 - r + 2 = 0, trigonometric method);
     const double th = acos(-3.0 * sqrt(lam)) / 3.0, k = 2.0 / sqrt(lam);  // the ray "escapes" on reaching r_c (0.9999 r_c): the (theta, phi) direction at that point is the sky one
     const double x0 = k * cos(th), x1 = k * cos(th - 2.0943951023931953), x2 = k * cos(th - 4.1887902047863905);
     double lo = fmin(x0, fmin(x1, x2)), hi = fmax(x0, fmax(x1, x2)), mid = x0 + x1 + x2 - lo - hi;
-    r_plus = mid; r_far_eff = 0.9999 * hi;
+    r_plus = mid; r_c = hi; r_far_eff = 0.9999 * hi;
   }
   const S r_cap = S(disc >= 0.0 ? r_plus + 1e-3 : 0.05), rfar = S(r_far_eff);
   // a camera inside the black-hole horizon, or beyond the cosmological one, has no static frame: treat the ray as absorbed instead of integrating NaNs for max_steps (watchdog)
   if (disc >= 0.0 && r0 <= r_plus) { out.fate = 1; return; }
   if (lam > 0.0 && r0 >= r_far_eff) { out.fate = 1; return; }
   const double mu0 = cos(theta0), s0 = sin(theta0);
-  S y[6] = {S(r0), S(-delta_d(r0, a, q2) * in.pr), S(mu0), S(s0 * in.ptheta), S(0), S(s0 * s0)};
+  // Backport from v4.0 O3: include lam in initial Delta so SdS dr/dtau is exact
+  S y[6] = {S(r0), S(-delta_d(r0, a, q2, lam) * in.pr), S(mu0), S(s0 * in.ptheta), S(0), S(s0 * s0)};
   S h = S(0.02 / r0);
   const F at = F(atol), rt = F(rtol), atp = F(atol_phi);
   const bool disk_on = disk_rout > 0;
@@ -224,6 +225,8 @@ __device__ void trace(double a, double r0, double theta0, double nr, double nth,
       h = fmin(h, S(hcap));
       h = fmin(h, S(vol->cap(float(y[0]))));  // the model's own step limit (torus: path length per step)
     }
+    // Backport from v4.0 O3: cap outgoing SdS steps at half the remaining distance to r_c
+    if (lam > 0.0 && y[1] > S(0)) h = fmin(h, S(0.5) * (S(r_c) - y[0]) / y[1]);
     S yn[6];
     F k1[6], k7[6];
     const F err = dp45_step<S, F>(c, y, h, yn, k1, k7, at, rt, atp);
@@ -236,8 +239,12 @@ __device__ void trace(double a, double r0, double theta0, double nr, double nth,
     // mu and sigma = 1 - mu^2 are redundant: near the pole (sigma < 1/2) sigma rules (relative precision), otherwise mu
     if (yn[5] < S(0.5)) yn[2] = copysign(sqrt(fmax(S(1) - yn[5], S(0))), yn[2]);
     else yn[5] = S(1) - yn[2] * yn[2];
-    yn[1] = copysign(sqrt(fmax(Rf(yn[0], cS), S(0))), yn1);
-    yn[3] = copysign(sqrt(fmax(Mf(yn[2], yn[5], cS), S(0))), yn3);
+    // Backport from v4.0 O3: conditional velocity reprojection (avoid ill-conditioned sqrt near turning points)
+    {
+      const S tolr = S(at) + S(rt) * fabs(yn[0]), tolm = S(at) + S(rt) * fabs(yn[2]);
+      if (yn1 * yn1 >= S(200) * fabs(S(k7[1])) * tolr) yn[1] = copysign(sqrt(fmax(Rf(yn[0], cS), S(0))), yn1);
+      if (yn3 * yn3 >= S(200) * fabs(S(k7[3])) * tolm || yn[5] < S(0.1)) yn[3] = copysign(sqrt(fmax(Mf(yn[2], yn[5], cS), S(0))), yn3);
+    }
 
     if (!Vol::kActive && disk_on && !out.disk_hit && (y[2] > S(0)) != (yn[2] > S(0))) {
       S lo = 0, hi = 1;
@@ -292,6 +299,17 @@ __device__ void trace(double a, double r0, double theta0, double nr, double nth,
         const float f0 = tdot(float(y[0]), float(y[5])), f1 = tdot(float(yn[0]), float(yn[5])), fm = tdot(float(hm(0, S(0.5))), float(hm(5, S(0.5))));
         vol->T += float(h) * (f0 + 4.f * fm + f1) * (1.f / 6.f);
       }
+    }
+    // Backport from v4.0 O3: interpolate SdS exit at r = rfar instead of taking the overshoot state
+    if (lam > 0.0 && yn[0] > rfar && yn[1] > S(0) && y[0] <= rfar) {
+      auto hm = [&](int i, S s) { const S s2 = s * s, s3 = s2 * s; return (S(2) * s3 - S(3) * s2 + S(1)) * y[i] + (s3 - S(2) * s2 + s) * h * k1[i] + (S(-2) * s3 + S(3) * s2) * yn[i] + (s3 - s2) * h * k7[i]; };
+      S lo = 0, hi = 1;
+      for (int it = 0; it < (sizeof(S) == 8 ? 60 : 28); ++it) { const S m = S(0.5) * (lo + hi); (hm(0, m) < rfar ? lo : hi) = m; }
+      const S s = S(0.5) * (lo + hi);
+      out.fate = 0;
+      out.mu_end = fmin(1.0, fmax(-1.0, double(hm(2, s))));
+      out.phi_end = double(hm(4, s));
+      return;
     }
 #pragma unroll
     for (int i = 0; i < 6; ++i) y[i] = yn[i];

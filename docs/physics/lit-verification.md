@@ -45,7 +45,23 @@ The EHT calibrates the M87\* MAD models with d/θ_g ≈ 11.0–11.1 (Paper VI); 
 **Sgr A\* (MAD, R_high = 160, i = 30°; the EHT Paper V "best bet"):** calibrated to **2.402 Jy** with `M_unit = 3.546e17 g` (M = 4.14e6 M☉, D = 8127 pc, 5.03 µas/M) the ring measures **10.1 M = 50.8 µas against 51.8 ± 2.3 µas** from the EHT (radial peak): compatible. Scenario in the UI.
 
 
-## Fishbone & Moncrief 1976, eq. (3.8) re-read directly from the page (2026-11-15)
-Read on p. 968 of the PDF (image): l(r) = ±(M/r³)^½ [r⁴ + r²a² − 2Mra² ∓ a(Mr)^½(r²−a²)] / [r² − 3Mr ± 2a(Mr)^½]; the text says the denominator vanishes at the photon-orbit radius. Compared by script (`scratchpad/fm38.py`) with the L/E of Kerr circular orbits (Bardeen 1972): **it does not match**, not even in Schwarzschild (r = 6: 4.899 against 3.674 = r^{3/2}/(r−2M); for a = 0 the formula gives r^{3/2}/(r−3M)). Since the L/E of a circular orbit is finite at r_ph and the l of (3.8) diverges there, **(3.8) is not the L/E of circular geodesics**; I did not identify what it is (it may be a quantity of their formalism that I did not understand, or a misreading on my part). **Not adopted**: nothing in the code uses (3.8) (the search in the code found no references); the torus comes from AthenaK and the NT disk uses Page–Thorne/Bardeen, validated by independent oracles. Recorded as a point to be clarified, with no impact on the results.
+## Fishbone & Moncrief 1976, eq. (3.8) — resolved (2026-11-19)
+Read directly from `data/papers/classics/fishbone-moncrief-1976.pdf` (Sec. II, p. 966, eq. 2.31 and text below eq. 2.33): Fishbone & Moncrief define the constant angular momentum per unit inertial mass as **`l ≡ u_φ u^t`**, NOT `L/E = -u_φ/u_t`. Because `u^t = (1 - 3M/r)^{-1/2}` for circular orbits in Schwarzschild, `u_φ u^t` legitimately diverges at the photon orbit (`r = 3M`), which explains the `r² - 3Mr` denominator in eq. (3.8). Our `torus.hpp` uses constant `L/E = -u_φ/u_t` (Bardeen–Press–Teukolsky 1972) and is independently verified by finite-difference hydrostatic equilibrium (`∂_a ln h = ½ u^μ u^ν ∂_a g_μν`). Mystery closed.
+
+## Limb darkening (2026-11-19): Chandrasekhar (1960) vs. grey Eddington
+Read directly from `data/papers/classics/Chandrasekhar_Radiative_Transfer.pdf` (Dover 1960, Chapter X, Table XXIV, p. 248): the exact emergent intensity of a pure **electron-scattering atmosphere** gives `I(0)/F = 0.41441` and `I(1)/F = 1.26938`, so `I(1)/I(0) = 3.0631` → linear approximation **`I(μ) ∝ 1 + 2.06 μ`**. The classical grey **Eddington** approximation is `I(μ) ∝ 1 + 1.5 μ` (`I(1)/I(0) = 2.5`). Our `disk_emission.hpp` now provides `limb_chandrasekhar` (`1 + 2.06 μ`) and `limb_eddington_grey` (`1 + 1.5 μ`), keeping `limb_eddington` as a backwards-compatible alias of `limb_chandrasekhar`.
+
+## M87* ring diameter `α` & AthenaK MAD saturation — resolved (2026-11-19)
+1. **REx diameter on `ipole`'s own images** (`tools/ring_diameter.py`, `i = 17°`, `3.819 µas/M`):
+   - `ipole` Illinois MAD `a = 0, R_high = 20`: **`d = 10.50 M = 40.1 µas`** (on the Schwarzschild critical curve `2√27 = 10.39 M`).
+   - `ipole` Illinois MAD `a = +0.94, T_p/T_e = 3`: **`d = 9.90 M = 37.8 µas`** — **identical** to our renderer (`9.90 M = 37.8 µas`).
+2. **Time-averaged AthenaK MAD stack** (20 dumps, `t = 5000..9750 M`, `σ_cut = 1`, EHT `R_high = 20`, `i = 17°`):
+   - Unblurred REx peak: **`9.70 M = 37.0 µas`** (tracks the Kerr critical curve `9.79 M = 37.4 µas`, because the unblurred photon ring dominates the radial peak).
+   - With a **20 µas EHT beam**: the radial peak shifts inward (`7.70 M`), while the flux-weighted diameter **`2⟨r⟩_flux = 10.43 M = 39.8 µas`** (compatible with `42 ± 3 µas`, consistent with EHT Paper VI p. 12: `xs-ring`/`xs-ringauss` `α ≈ 11.0–11.5` picks up extended emission outside the photon ring).
+   - **Verdict:** the `α ≈ 9.8` vs `11.0–11.1` gap is the estimator (unblurred REx peak vs. EHT visibility-domain `xs-ringauss`), not a physics error in our simulator.
+3. **AthenaK `10⁴ M` MAD saturation & accretion rate** (`data/athenak/run_d/T10k_d/torus.user.hst`, `t ∈ [5000, 10000] M`, 501 samples):
+   - **`⟨Φ/√ṁ⟩ = 14.94 ± 3.04` (Heaviside-Lorentz)** = **`53.0` (Gaussian)**, matching the EHT Paper V (fn. 111, p. 4) MAD saturation criterion `φ_max ≈ 15` (HL) / `≈ 50` (Gaussian).
+   - **M87\* (`M_unit = 8.589e24 g`):** `Ṁ = 7.21e-5 M☉/yr = 4.98e-7 Ṁ_Edd` (EHT Paper V MAD mean `~10⁻⁶ Ṁ_Edd`, range `2e-7`–`4e-4`).
+   - **Sgr A\* (`M_unit = 5.003e17 g`):** `Ṁ = 6.59e-9 M☉/yr = 7.16e-8 Ṁ_Edd` (right inside EHT Sgr A\* Paper V best-bet range `(5.2–9.5)e-9 M☉/yr`).
 
 **Update 2026-11-18:** with the EHT electron convention (note 41) Sgr A* is recalibrated to `M_unit = 5.003e17 g` (2.401 Jy); ring 9.90 M = 49.8 µas against 51.8 ± 2.3 µas (still compatible).

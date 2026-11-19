@@ -235,7 +235,7 @@ static Cli parse(int argc, char** argv) {
     else if (is("--flux-target")) c.flux_target = std::atof(argv[++i]);
     else if (is("--radio-out")) c.radio_out = argv[++i];
     else if (is("--munit")) p.munit = std::max(1.0, std::atof(argv[++i]));
-    else if (is("--electrons")) { const char* m = argv[++i]; p.electrons = std::strcmp(m, "rhigh") == 0 ? 1 : std::strcmp(m, "prop") == 0 ? 2 : 0; }
+    else if (is("--electrons")) { const char* m = argv[++i]; p.electrons = std::strcmp(m, "rhigh") == 0 ? 1 : std::strcmp(m, "prop") == 0 ? 2 : std::strcmp(m, "rhigh-single") == 0 ? 3 : 0; }
     else if (is("--rhigh")) p.rhigh = std::max(1.0, std::atof(argv[++i]));
     else if (is("--th-e-ratio")) p.th_e_ratio = std::max(0.0, std::atof(argv[++i]));
     else if (is("--torus")) { if (std::sscanf(argv[++i], "%lf,%lf,%lf", &p.torus_rin, &p.torus_rmax, &p.torus_gamma) < 2) { std::fprintf(stderr, "--torus rin,rmax[,gamma]\n"); std::exit(1); } }
@@ -244,6 +244,7 @@ static Cli parse(int argc, char** argv) {
     else if (is("--ti-te")) p.ti_te = std::max(0.1, std::atof(argv[++i]));
     else if (is("--grmhd-step")) p.grmhd_step = std::max(0.005, std::atof(argv[++i]));
     else if (is("--grmhd-rcap")) p.grmhd_rcap = std::max(2.0, std::atof(argv[++i]));
+    else if (is("--grmhd-sigma-cut")) p.grmhd_sigma_cut = std::max(0.0, std::atof(argv[++i]));
     else if (is("--grmhd-half")) kcuda::grmhd_set_half(true);
     else if (is("--torus-step")) p.torus_step = std::max(0.05, std::atof(argv[++i]));
     else if (is("--theta-e-max")) p.theta_e_max = std::max(0.0, std::atof(argv[++i]));
@@ -1839,7 +1840,7 @@ static int interactive(Cli& c) {
            double(int(p.prec)), double(p.nt), p.beta[0], p.beta[1], p.beta[2], double(int(p.tonemap)), p.bloom, p.beaming, p.clamp_lum, p.fcol, double(p.limb), double(p.expose_physical), p.edge_soft, p.edge_noise, p.hr, p.tau, p.flare,
            p.fwd[0], p.fwd[1], p.fwd[2], p.right[0], p.right[1], p.right[2], p.up[0], p.up[1], p.up[2], double(a.hud), p.glare, p.grain, p.vignette, p.chroma, double(p.denoise),
            p.charge, p.lambda, double(p.wormhole), double(p.wh_ellis), p.wh_lc, p.wh_rho, p.fov_deg, p.rin, p.rout, double(p.model), p.hr, p.tau, p.flare, p.turb, p.disk_time, double(p.slowlight),
-           p.ne0, p.plasma_beta, p.theta_e_max, p.rhigh, p.munit, p.tb_lo, p.tb_hi, double(p.emission), double(p.electrons), double(p.hdr), double(a.dump_serial)};
+           p.ne0, p.plasma_beta, p.theta_e_max, p.rhigh, p.munit, p.grmhd_sigma_cut, p.tb_lo, p.tb_hi, double(p.emission), double(p.electrons), double(p.hdr), double(a.dump_serial)};
     const bool changed = key != key_prev;
     key_prev = key;
     // reduced resolution only while the scene changes (--move-scale); when it stops, it restarts accumulating at full resolution

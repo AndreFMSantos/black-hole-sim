@@ -18,7 +18,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-import segments as S
+import importlib
+S = importlib.import_module(os.environ.get('BHS_SEGMENTS', 'segments'))
 
 FONT_B = "/usr/share/fonts/noto/NotoSans-Bold.ttf"
 FONT_R = "/usr/share/fonts/noto/NotoSans-Regular.ttf"
